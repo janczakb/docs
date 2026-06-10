@@ -7,6 +7,56 @@ description: "Full release history for Filament Short URL — covering every maj
 Each release below is listed from newest to oldest. Expand a version to see the key changes introduced. Bug fixes and minor internal improvements are noted only when they have a user-visible impact.
 
 <AccordionGroup>
+  <Accordion title="v5.2.3 — Production Redis Mode, Stats Scaling, and Settings Diagnostics">
+    - **Redis connection in Settings** — When **Queue Connection = `redis`**, configure host, port, password, database, and key prefix in **Settings → General**; values override `database.redis` and `queue.connections.redis` at runtime independently of `CACHE_STORE`.
+    - **Test Redis connection** — PING \+ pipelined `INCR`/`SADD` probe directly from the Settings form using unsaved preview values.
+    - **Test queue worker** — Dispatches a `VerifyQueueWorkerJob` and waits up to 12 s; reports the exact `php artisan queue:work {connection} --queue={name}` command when no worker responds.
+    - **`StatsScalingProfile`** — Auto-enables counter buffering, dedicated Redis counters, and a Redis "today" buffer when queue is `redis`; SQL micro-cache for sync mode.
+    - **`VisitCounterBuffer` and `TodayStatsBuffer`** — Pipelined Redis counters for buffered totals/uniques and today's summary; live-merged in the stats cache without busting historical cache per click.
+    - **`StatsVisitRecorder`** — Hot-path stats side effects extracted from `TrackShortUrlVisitJob`; per-visit full cache flush removed.
+    - **Live feed** — `LiveFeedBroadcaster` prefers the plugin queue Redis over `CACHE_STORE` Redis.
+    - **Service provider** — All package migrations registered in `hasMigrations()` including `2026_06_10_000001` and `2026_06_11_000001`.
+  </Accordion>
+
+  <Accordion title="v5.2.2 — Enterprise Hardening, Airtight Counters, and i18n Audit">
+    - **XSS** — `@json()` used in pixel interstitial and Alpine stats widgets (replaces `addslashes()`).
+    - **Atomic `max_visits`** — `VisitSlotReservation::reserveAtomicSlot()` with fast-path SQL and pessimistic lock near cap.
+    - **Single-use bots** — BotDetector gate before consuming single-use links.
+    - **Buffer double-count fix** — `revertBufferedIncrements()` before DB fallback in `HasVisitCounters`.
+    - **API tenancy** — `owner_user_id` required on API keys when `scope_links_to_user` is enabled.
+    - **IDOR** — `ResourceOwnershipValidator` for folder/tag/pixel on API writes.
+    - **Redirect pipeline** — Limits enforced before app interstitial; caps respected when `track_visits=false`.
+    - **`StatsCacheHelper`** — `Cache::lock` on stats miss to prevent stampedes.
+    - **`preloadBufferedCountersForIds()`** — Batched buffer reads in list tables.
+    - **Public stats** — Uniform 404 and a public-safe response subset.
+    - **`HasStats` facade** — Split into `HasVisitCounters`, `HasStatsCache`, `HasStatsQueries`, `HasSecurityStats`.
+    - **i18n** — API, redirect, and visitor-facing strings switched to translation keys (EN \+ PL).
+  </Accordion>
+
+  <Accordion title="v5.2.1 — Authorization Policy, API Stats Parity, SSE Live Feed, and Load Baselines">
+    - **`ShortUrlPolicy`** — `view`, `update`, `delete`, `restore`, `forceDelete`, and `manageSettings` aligned with `scope_links_to_user` / `user_id`; auto-registered when the host has no custom policy.
+    - **API filtered stats** — `GET /links/{idOrKey}/stats` accepts the same cross-dimensional filters as the Filament dashboard via `ApiStatsFilterParser` (aliases: `country` → `country_code`, `device` → `device_type`); response includes `meta.date_from`, `meta.date_to`, `meta.filters`.
+    - **SSE live feed** — Authenticated `GET /short-url/live-feed/{shortUrl}/stream` replaces Livewire polling; configurable interval and max duration.
+    - **Stress baselines** — `php artisan short-url:stress-redirect {key}` benchmark and a `scripts/k6/redirect-baseline.js` k6 load script with p95 thresholds.
+  </Accordion>
+
+  <Accordion title="v5.2.0 — SEO & Social, Open Graph, Link Cloaking, and Integration Hardening">
+    - **SEO & Social tab** — Per-link `og_title`, `og_description`, `og_image`, `do_index`, `is_cloaked` with a live social preview sidebar.
+    - **Open Graph meta** — Per-link OG/Twitter tags for Facebook, LinkedIn, X, Slack, WhatsApp, and other preview bots; SSRF-safe streaming scraper (`GET /short-url/scrape-meta`); WebP image pipeline with temp → permanent promotion.
+    - **Search indexing toggle** — `do_index=false` emits `noindex, nofollow` on all responses for that link.
+    - **Link cloaking** — `is_cloaked=true` iframe-embeds the destination on your short-link domain for humans while serving a standalone OG page to crawlers; pre-check iframeability via `POST /short-url/check-iframeable`.
+    - **REST API expansion** — Bulk create (`POST /links/bulk`, max 100), upsert (`PUT /links/upsert`), `GET /links/exists`, `/random`, `/info`, CSV visit export, tags/folders CRUD, link-level UTM (`utm_source/medium/campaign/term/content`, `ref`), optional `owner_user_id` per API key.
+    - **Public stats** — `GET /short-url/public-stats/{url_key}` with optional password (accepted via POST body or `Authorization` header, never query string); rate limited 60/min.
+    - **Custom domains** — `domain_scope_id` \+ composite unique `(url_key, domain_scope_id)` allow the same slug on default and each custom domain; multi A-record \+ multi-CNAME verification; activation DNS gate (`SHORT_URL_CUSTOM_DOMAIN_ENFORCE_DNS=true` by default); legacy `/s/{key}` on custom domains 301 → `/{key}`.
+    - **Stateless redirect** — Main `/s/{key}` route uses `throttle:120,1` only (no `web` middleware); password flow stays on `/s-auth/{key}` with sessions.
+    - **Security hardening** — DNS-aware SSRF guard on outbound URLs (webhooks, OG scraper, iframe checker); webhook re-validated at dispatch with `allow_redirects=false`; Safe Browsing fail-closed \+ cached re-check at redirect; passwords hashed at rest with legacy auto-rehash; bot hardening (Googlebot IP verify, `?bot=1` secret, click dedup); API keys hashed-only; webhook signing required by default.
+    - **Filament tenancy** — `LockedUrlKeyGuard` blocks `url_key`/`custom_domain_id` changes server-side; `LinkUserScope` filters resources by `user_id`; API `CustomDomainValidator` enforces domain ownership.
+    - **GA4 Measurement Protocol** — Extracted `Ga4MeasurementProtocolService` singleton with full MP payload (`session_id`, `timestamp_micros`, `engagement_time_msec`, standard `page_view` \+ `click`, custom `short_url_visit`); Measurement ID regex validation; real-credential Test connection in Settings.
+    - **Geo-IP foolproofing** — `geo_ip_driver=headers` auto-forces `trust_cdn_headers=true`; offline fallback chain Headers → MaxMind → ip-api with a 40-req/min rate limit on the API fallback.
+    - **Stats engine** — `FilteredStatsCollector` replaces 15\+ raw GROUP BY queries with daily JSON rollups; `CrossDimensionalStatsEngine` stores single- and two-filter slices in `short_url_daily_stats`; `StatsCacheHelper` driver-agnostic remember/forget; `getSecurityBreakdownStats()` daily bot/proxy rollups; visit logs cursor pagination on `(visited_at, id)`.
+    - **Migrations** — `2026_06_08_000001` (`external_id`, UTM, public stats, visits index), `2026_06_09_000001` (`domain_scope_id`, composite unique, FK ON DELETE SET NULL, JSON daily stats dimensions), `2026_06_10_000001` (security counts), `2026_06_11_000001` (cross-dimensional stats); all cross-DB safe.
+    - **Default queue** — Remains **`sync`** so the plugin works without a worker; opt-in `database` / `redis` via Settings or `SHORT_URL_QUEUE`.
+  </Accordion>
 
   <Accordion title="v5.0.0 — Live Feed, Folders, Tags, and API Scopes">
     - **Live Activity Feed** is now a full standalone page (`/{record}/stats/live`) with consistent tab navigation alongside Statistics and Visit Logs.
@@ -31,7 +81,7 @@ Each release below is listed from newest to oldest. Expand a version to see the 
   </Accordion>
 
   <Accordion title="v3.5.0 — User Attribution, A/B Testing, and GDPR IP Anonymization">
-    - **User Attribution** — Short URLs now record their creator; avatar and hover card (name + email) are displayed in the link list table.
+    - **User Attribution** — Short URLs now record their creator; avatar and hover card (name \+ email) are displayed in the link list table.
     - **Relative Date Badges** — Creation dates display compact relative strings (`2h`, `5d`, `3mo`) with the precise date visible on hover.
     - **Keyboard Shortcuts** — Press `E`, `Q`, `I`, `S`, or `X` while hovering a table row to edit, view QR code, copy, view stats, or delete.
     - Clicking a table row now navigates directly to the link's Statistics page.
@@ -66,12 +116,12 @@ Each release below is listed from newest to oldest. Expand a version to see the 
     - Statistics aggregation command rewritten to use database-level `GROUP BY` queries, reducing memory usage to near zero.
     - API keys are now stored as SHA-256 hashes, verified with `hash_equals()`, and shown only once on generation.
     - **HMAC-signed webhooks** — Webhook payloads are now optionally signed via `X-ShortUrl-Signature` using a configurable secret.
-    - GA4 Client IDs are now deterministic (hashed IP + User Agent) instead of random UUIDs.
+    - GA4 Client IDs are now deterministic (hashed IP \+ User Agent) instead of random UUIDs.
     - Single-use, max-visit, and expiring links now force `302` redirects to prevent browser caching from bypassing visit tracking.
   </Accordion>
 
   <Accordion title="v3.0.0 — Native App Linking, Pixel Registry, and Custom Expiry Pages">
-    - **Native App Linking** — Automatically redirect mobile visitors into 24+ native apps (YouTube, TikTok, Instagram, Spotify, WhatsApp, etc.) using custom URL schemes, with a glassmorphic interstitial page.
+    - **Native App Linking** — Automatically redirect mobile visitors into 24\+ native apps (YouTube, TikTok, Instagram, Spotify, WhatsApp, etc.) using custom URL schemes, with a glassmorphic interstitial page.
     - Live interactive app-matching preview widget inside the Filament edit form.
     - **Global Deep Linking Files** — Serve iOS `apple-app-site-association` and Android `assetlinks.json` from your root domain (disabled by default, configured via Settings).
     - **Central Retargeting Pixel Registry** — Define Meta Pixel, Google Tag, LinkedIn Insight, TikTok Pixel, and Pinterest Tag once, then attach them to any link via checkbox selection in the UI or the REST API.
@@ -130,5 +180,4 @@ Each release below is listed from newest to oldest. Expand a version to see the 
     - New **Performance & Security** settings tab for aggregation, pruning, and rate limiting configuration.
     - Full Polish (`pl`) locale translation support.
   </Accordion>
-
 </AccordionGroup>

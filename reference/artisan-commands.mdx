@@ -4,7 +4,7 @@ sidebarTitle: "Artisan Commands"
 description: "Reference for the two built-in Artisan commands that sync buffered visit counters and aggregate or prune raw visit logs on a schedule."
 ---
 
-The plugin ships two Artisan commands that keep your database lean and your visit counters accurate at any traffic level. Both commands are auto-registered by the service provider as of v1.3.0 — you only need the standard Laravel cron entry running on your server.
+The plugin ships several Artisan commands that keep your database lean, your counters accurate, and your custom domains verified at any traffic level. All scheduled commands are auto-registered by the service provider — you only need the standard Laravel cron entry running on your server.
 
 ---
 
@@ -20,6 +20,7 @@ php artisan short-url:sync-counters
   <Card title="When to use" icon="clock">
     Only relevant when **Buffer Visit Counts in Cache** is enabled in **Settings → Performance**. Without buffering, all counts are written directly to the database on each click.
   </Card>
+
   <Card title="Auto-schedule" icon="calendar">
     Automatically scheduled **every minute** by the service provider when counter buffering is ON in Settings. No manual schedule entry required.
   </Card>
@@ -39,6 +40,7 @@ php artisan short-url:aggregate-and-prune
   <Card title="When to use" icon="clock">
     Enable **Daily Aggregation** in **Settings → Performance**. At high traffic volumes, raw visit logs can grow to gigabytes — aggregation keeps dashboard queries fast while preserving all statistical data.
   </Card>
+
   <Card title="Auto-schedule" icon="calendar">
     Automatically scheduled **daily at 02:00** by the service provider when aggregation is ON in Settings. No manual schedule entry required.
   </Card>
@@ -47,11 +49,37 @@ php artisan short-url:aggregate-and-prune
 ### Retention configuration
 
 | Setting | Default | Description |
-|---|---|---|
+| --- | --- | --- |
 | Enable pruning | `true` | Toggle raw log deletion after aggregation |
 | Retention window | 90 days | Days to retain raw visit records before pruning |
 
 Configure both options in **Settings → Performance**, or via the `SHORT_URL_PRUNING_ENABLED` and `SHORT_URL_PRUNING_DAYS` environment variables. Set the retention window to `0` to disable pruning while keeping aggregation active.
+
+---
+
+## `short-url:verify-custom-domains`
+
+Re-verifies DNS records for all custom domains attached to short links. Resolves all A records and follows multiple CNAME targets, intersects them against `app.url`, and updates each domain's verification status. When `custom_domains.enforce_dns_on_activate` is `true` (default), domains that lose DNS are auto-deactivated.
+
+```bash
+php artisan short-url:verify-custom-domains
+```
+
+<Card title="Auto-schedule" icon="calendar">
+  Automatically scheduled **daily** by the service provider. Added in v5.2.0.
+</Card>
+
+---
+
+## `short-url:stress-redirect {key}`
+
+In-process redirect benchmark for a given `url_key` (added in v5.2.1). Reports average, min, p95, and max latency in milliseconds — useful for verifying queue and cache configuration before production rollout.
+
+```bash
+php artisan short-url:stress-redirect abc123 --iterations=1000
+```
+
+A companion k6 HTTP load script lives at `scripts/k6/redirect-baseline.js` with configurable VUs, duration, and p95 thresholds.
 
 ---
 
@@ -81,4 +109,7 @@ Schedule::command('short-url:sync-counters')->everyMinute();
 
 // Aggregate stats and prune old raw visits nightly
 Schedule::command('short-url:aggregate-and-prune')->dailyAt('02:00');
+
+// Re-verify custom domain DNS once a day
+Schedule::command('short-url:verify-custom-domains')->daily();
 ```

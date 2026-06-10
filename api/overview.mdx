@@ -10,20 +10,33 @@ The Filament Short URL REST API lets you manage short links programmatically fro
 
 All endpoints are relative to your own domain:
 
-```
+```text
 https://yourdomain.com/api/short-url
 ```
 
 ## Available Endpoints
 
 | Method | Path | Description |
-|--------|------|-------------|
+| --- | --- | --- |
 | `GET` | `/api/short-url/links` | List all short links (paginated) |
 | `POST` | `/api/short-url/links` | Create a new short link |
+| `POST` | `/api/short-url/links/bulk` | Bulk create up to 100 links in one request |
+| `PUT` | `/api/short-url/links/upsert` | Upsert by `external_id` or `url_key` \+ `destination_url` |
+| `GET` | `/api/short-url/links/exists` | Check if a `url_key` exists (scoped by domain) |
+| `GET` | `/api/short-url/links/random` | Generate a random unused `url_key` |
+| `GET` | `/api/short-url/links/info` | Inspect a destination URL (preview metadata) |
 | `GET` | `/api/short-url/links/{idOrKey}` | Retrieve a single short link |
 | `PUT` / `PATCH` | `/api/short-url/links/{idOrKey}` | Update a short link |
 | `DELETE` | `/api/short-url/links/{idOrKey}` | Delete a short link |
-| `GET` | `/api/short-url/links/{idOrKey}/stats` | Retrieve analytics for a short link |
+| `GET` | `/api/short-url/links/{idOrKey}/stats` | Retrieve analytics (supports cross-dimensional filters) |
+| `GET` | `/api/short-url/links/{idOrKey}/visits/export` | Export visits log as CSV |
+| `GET` / `POST` / `PUT` / `DELETE` | `/api/short-url/tags` | Tags CRUD |
+| `GET` / `POST` / `PUT` / `DELETE` | `/api/short-url/folders` | Folders CRUD |
+| `GET` | `/short-url/public-stats/{url_key}` | Public shareable stats (optional password) |
+
+<Info>
+  **v5.2.0** added bulk create, upsert, exists/random/info helpers, CSV visit export, tags/folders CRUD, public stats endpoint, link-level UTM fields, and optional `owner_user_id` scoping on API keys. Filtered stats (`/stats`) accepts the same cross-dimensional filters as the Filament dashboard (`country`, `device`, `browser`, `os`, UTM, etc.).
+</Info>
 
 ## Authentication
 
@@ -44,7 +57,7 @@ X-Api-Key: YOUR_API_KEY
 Each key carries one of two scopes that control which operations it may perform:
 
 | Scope | Allowed Methods | Typical Use Case |
-|-------|-----------------|------------------|
+| --- | --- | --- |
 | `links:read-only` | `GET` only | Dashboards, reporting tools, read-only integrations |
 | `links:read-write` | `GET`, `POST`, `PUT`, `PATCH`, `DELETE` | Full automation, CRM sync, link management |
 
@@ -64,7 +77,7 @@ When you exceed the rate limit, the API returns `429 Too Many Requests` with a `
 Include these headers on every request:
 
 | Header | Value | Required |
-|--------|-------|----------|
+| --- | --- | --- |
 | `Authorization` | `Bearer YOUR_API_KEY` | Required (or use `X-Api-Key`) |
 | `X-Api-Key` | `YOUR_API_KEY` | Alternative to `Authorization` |
 | `Accept` | `application/json` | Always |
@@ -81,6 +94,7 @@ All successful responses wrap the payload in a `data` key. Write operations (`PO
 ### Error Responses
 
 <CodeGroup>
+
 ```json 401 Unauthenticated
 {
   "error": "Unauthorized. API Key is missing."
@@ -109,12 +123,13 @@ All successful responses wrap the payload in a `data` key. Write operations (`PO
   "error": "The Developer API is currently disabled. Enable it in Short URL Settings → API & Webhooks."
 }
 ```
+
 </CodeGroup>
 
 ### HTTP Status Code Reference
 
 | Code | Meaning |
-|------|---------|
+| --- | --- |
 | `200 OK` | Request succeeded |
 | `201 Created` | Resource created successfully |
 | `401 Unauthorized` | Missing or invalid API key |

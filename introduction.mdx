@@ -4,7 +4,7 @@ sidebarTitle: "Introduction"
 description: "A Filament v5 plugin for Laravel that adds URL shortening, QR codes, analytics, smart targeting, retargeting pixels, deep linking, REST API, and webhooks."
 ---
 
-Filament Short URL is a drop-in plugin for Laravel 11+ and Filament v5 that transforms your existing application into a fully self-hosted link management platform. Instead of paying monthly fees to Bitly, Dub.co, or Rebrandly, you install one Composer package and own every part of the stack — your server, your database, your data, and zero artificial limits on links or clicks.
+Filament Short URL is a drop-in plugin for Laravel 11\+ and Filament v5 that transforms your existing application into a fully self-hosted link management platform. Instead of paying monthly fees to Bitly, Dub.co, or Rebrandly, you install one Composer package and own every part of the stack — your server, your database, your data, and zero artificial limits on links or clicks.
 
 ## What You Get
 
@@ -12,26 +12,41 @@ Filament Short URL is a drop-in plugin for Laravel 11+ and Filament v5 that tran
   <Card title="Link Management" icon="link">
     Create short links with collision-free Base62 keys or custom slugs. Set expiration dates, visit caps, single-use mode, password protection, and redirect warning pages. Organise links into folders and tag them for quick filtering.
   </Card>
+
   <Card title="QR Code Designer" icon="qrcode">
     Generate fully customisable SVG QR codes with dot styles, gradients, logo overlays, and margin control. Export as SVG or high-resolution PNG. QR scans are tracked separately from regular web clicks.
   </Card>
+
   <Card title="Analytics Dashboard" icon="chart-bar">
     Track total and unique visits, referrers, devices, browsers, operating systems, countries, cities, and browser languages. Cross-filter any dimension interactively, watch a live activity feed, and visualise click distribution on an interactive world map.
   </Card>
+
   <Card title="Smart Targeting" icon="crosshairs">
     Route different visitors to different destinations from a single short URL. Build rules based on device type, platform, country, browser language, or any combination with AND/OR logic. Nest A/B split tests inside targeting rules for granular conversion testing.
   </Card>
+
   <Card title="Retargeting Pixels" icon="bullseye">
     Define Meta Pixel, Google Tag, LinkedIn Insight, TikTok, and Pinterest pixels once in a central registry. Attach any combination to a link with a checkbox — every click fires the selected scripts in the visitor's browser, even when redirecting to external domains.
   </Card>
+
   <Card title="Deep Linking" icon="mobile">
-    Detect mobile visitors and launch URLs directly inside 24+ native apps — YouTube, TikTok, Instagram, Spotify, WhatsApp, and more. Serve `apple-app-site-association` and `assetlinks.json` from your domain for OS-level Universal Links and Android App Links.
+    Detect mobile visitors and launch URLs directly inside 24\+ native apps — YouTube, TikTok, Instagram, Spotify, WhatsApp, and more. Serve `apple-app-site-association` and `assetlinks.json` from your domain for OS-level Universal Links and Android App Links.
   </Card>
+
   <Card title="REST API" icon="code">
     Full CRUD API with SHA-256 hashed key storage, `links:read-only` / `links:read-write` scopes, and per-key rate limits. Connect CRMs, Zapier, Make, or any external system without touching the admin panel.
   </Card>
+
   <Card title="Webhooks" icon="webhook">
     Receive real-time HMAC-SHA256 signed HTTP POST callbacks on `visited`, `created`, `expired`, and `limit_reached` events. Configure webhooks per link or globally, dispatched asynchronously with a three-attempt exponential retry policy.
+  </Card>
+
+  <Card title="SEO, Open Graph & Cloaking" icon="share-nodes">
+    Set per-link `og_title`, `og_description`, and `og_image` with a live social preview. Toggle search indexing (`do_index`) per link or cloak destinations behind an iframe on your short-link domain so social bots see your branded preview while humans land on the target.
+  </Card>
+
+  <Card title="Public Shareable Stats" icon="chart-line">
+    Share a read-only stats page (`/short-url/public-stats/{key}`) with optional password protection. Rate limited and host-scoped — perfect for client reports without granting Filament panel access.
   </Card>
 </CardGroup>
 

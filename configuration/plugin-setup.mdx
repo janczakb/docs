@@ -6,6 +6,21 @@ description: "Learn how to register Filament Short URL in your Panel Provider an
 
 Every Filament plugin starts in a Panel Provider. Filament Short URL is no different — you register it once, configure it with a fluent API, and the plugin wires up all resources, the Settings page, and the redirect engine automatically. This page walks you through every option available on the plugin class.
 
+<Warning>
+  **First-time install and every upgrade:** compile the plugin's Tailwind v4 stylesheet and republish Filament assets, otherwise the panel renders without plugin styles.
+
+  ```bash
+  npx @tailwindcss/cli \
+    -i ./vendor/janczakb/filament-short-url/resources/css/plugin.css \
+    -o ./vendor/janczakb/filament-short-url/resources/dist/filament-short-url.css \
+    --minify
+  
+  php artisan filament:assets
+  ```
+
+  See [Quickstart](/quickstart) for the full install flow.
+</Warning>
+
 ## Registering the Plugin
 
 Open your Panel Provider — typically `app/Providers/Filament/AdminPanelProvider.php` — and add `FilamentShortUrlPlugin` to the `plugins()` call:
@@ -32,25 +47,25 @@ All fluent methods are **optional**. When you omit a method, the plugin falls ba
 
 Use these methods to position the plugin's menu items wherever they belong in your sidebar:
 
-<ParamField path="navigationGroup" type="string" optional>
+<ParamField path="navigationGroup" type="string">
   Groups all Short URL resources under a named sidebar section (e.g. `'Marketing'`). When omitted, the items appear ungrouped.
 </ParamField>
 
-<ParamField path="navigationLabel" type="string" optional>
+<ParamField path="navigationLabel" type="string">
   Overrides the top-level menu item label. When omitted, the plugin uses its built-in translation string.
 </ParamField>
 
-<ParamField path="navigationIcon" type="string" optional>
+<ParamField path="navigationIcon" type="string">
   Replaces the default sidebar icon with any [Heroicon](https://heroicons.com) name. When omitted, the plugin uses its built-in default icon.
 </ParamField>
 
-<ParamField path="navigationSort" type="integer" optional>
+<ParamField path="navigationSort" type="integer">
   Controls where the resource appears in the sidebar list relative to other items. Lower values float to the top. When omitted, Filament uses its default sort order.
 </ParamField>
 
 ## Restricting Settings Access
 
-<ParamField path="authorizeSettingsUsing" type="Closure" optional>
+<ParamField path="authorizeSettingsUsing" type="Closure">
   Accepts any closure that returns a `bool`. When the closure returns `false`, the Settings page returns a `403` and the **Settings** button in the table header is hidden automatically.
 </ParamField>
 
@@ -92,7 +107,7 @@ protected $policies = [
 ```
 
 <Info>
-**Priority order:** `authorizeSettingsUsing()` callback → `ShortUrlPolicy@manageSettings` → default `canViewAny()` fallback.
+  **Priority order:** `authorizeSettingsUsing()` callback → `ShortUrlPolicy@manageSettings` → default `canViewAny()` fallback.
 </Info>
 
 ## The Settings Panel
@@ -100,7 +115,7 @@ protected $policies = [
 The plugin ships a built-in **Settings** page accessible directly from the sidebar. Settings are persisted and cached automatically, and they immediately override any config file defaults.
 
 <Tip>
-You can configure most day-to-day options — queue connection, Geo-IP driver, rate limiting, GA4 credentials, and more — directly in the Settings panel without touching `.env` or config files.
+  You can configure most day-to-day options — queue connection, Geo-IP driver, rate limiting, GA4 credentials, and more — directly in the Settings panel without touching `.env` or config files.
 </Tip>
 
 The Settings form is split into eight focused tabs: **Link**, **Targeting**, **Tracking**, **Security**, **Geo-IP**, **VPN Detection**, **QR Design**, and **Pixels**. Navigate between tabs using URL query parameters (e.g. `?tab=qr`).
@@ -153,5 +168,5 @@ You can substitute the built-in `ShortUrl` and `ShortUrlVisit` models with your 
 ```
 
 <Note>
-Custom model classes must extend the package's base models (`Bjanczak\FilamentShortUrl\Models\ShortUrl` and `Bjanczak\FilamentShortUrl\Models\ShortUrlVisit`) to ensure full compatibility with the Filament resources and redirect engine.
+  Custom model classes must extend the package's base models (`Bjanczak\FilamentShortUrl\Models\ShortUrl` and `Bjanczak\FilamentShortUrl\Models\ShortUrlVisit`) to ensure full compatibility with the Filament resources and redirect engine.
 </Note>
