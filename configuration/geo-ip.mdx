@@ -1,0 +1,136 @@
+---
+title: "Geo-IP Configuration for Visitor Country Detection"
+sidebarTitle: "Geo-IP"
+description: "Configure visitor country detection with one of three Geo-IP drivers — CDN headers, offline MaxMind database, or the ip-api.com fallback — for analytics and targeting."
+---
+
+Geo-IP resolves a visitor's country from their IP address so you can display country breakdowns in the analytics dashboard, apply country-based targeting rules, and pass location data to GA4 and webhooks. The plugin ships three drivers with different tradeoffs between latency, accuracy, and operational complexity. You pick the one that fits your infrastructure.
+
+<Note>
+Geo-IP results are cached per IP address. The default cache TTL for individual geo lookups is **24 hours**, so repeated visits from the same IP do not trigger additional lookups.
+</Note>
+
+## Enabling Geo-IP
+
+Geo-IP is enabled by default. To disable it entirely:
+
+```bash
+SHORT_URL_GEO_IP=false
+```
+
+When disabled, no country data is recorded and the country column in analytics shows blank.
+
+## Choosing a Driver
+
+Set the driver with:
+
+```bash
+SHORT_URL_GEO_IP_DRIVER=maxmind  # headers | maxmind | ip-api
+```
+
+---
+
+## Driver 1: `headers` (Default)
+
+The `headers` driver reads the visitor's country directly from CDN-injected request headers. It requires **zero external calls** and adds no latency to the redirect path.
+
+**Supported headers:**
+- `CF-IPCountry` — injected by Cloudflare
+- `CloudFront-Viewer-Country` — injected by AWS CloudFront
+- Generic proxy headers as a fallback
+
+**When to use it:** You are already routing traffic through a compatible CDN. This is the fastest option because country resolution happens at the CDN edge before the request reaches your server.
+
+**Requirement:** You must also enable CDN header trust so the plugin reads proxy headers instead of ignoring them:
+
+```bash
+SHORT_URL_TRUST_CDN_HEADERS=true
+```
+
+<Warning>
+Only set `SHORT_URL_TRUST_CDN_HEADERS=true` when you are genuinely behind a CDN or reverse proxy. Enabling it on a server with direct public internet access allows clients to spoof country codes by injecting arbitrary headers.
+</Warning>
+
+---
+
+## Driver 2: `maxmind`
+
+The `maxmind` driver performs country lookups offline against a local MaxMind GeoLite2-Country `.mmdb` database file. No data ever leaves your server.
+
+**When to use it:** Production environments where GDPR compliance, offline operation, or high request volumes make external API calls impractical.
+
+<Tip>
+MaxMind is the recommended driver for production. It is offline, GDPR-safe, has no rate limits, and adds negligible latency since the lookup is a local file read.
+</Tip>
+
+### Setup
+
+<Steps>
+  <Step title="Create a free MaxMind account">
+    Visit [maxmind.com](https://www.maxmind.com/en/geolite2/signup) and sign up for a free account to access the GeoLite2 database.
+  </Step>
+  <Step title="Download GeoLite2-Country.mmdb">
+    From your MaxMind account dashboard, download the **GeoLite2 Country** database in `.mmdb` format and place the file somewhere accessible by your application, for example `storage/geoip/GeoLite2-Country.mmdb`.
+  </Step>
+  <Step title="Configure the path">
+    Set the database path in your `.env`:
+
+    ```bash
+    SHORT_URL_GEO_IP_DRIVER=maxmind
+    SHORT_URL_MAXMIND_DB=/absolute/path/to/GeoLite2-Country.mmdb
+    ```
+
+    The default path is `storage_path('geoip/GeoLite2-Country.mmdb')` which resolves to `storage/geoip/GeoLite2-Country.mmdb` relative to your Laravel root.
+  </Step>
+  <Step title="Verify the database file">
+    Open **Settings → Geo-IP** in your Filament panel and click the **Verify file** action. The plugin checks whether the `.mmdb` path is valid and the database is readable.
+  </Step>
+</Steps>
+
+---
+
+## Driver 3: `ip-api`
+
+The `ip-api` driver makes HTTP requests to [ip-api.com](https://ip-api.com) to resolve country codes. It is free, requires no API key, and is the easiest to set up.
+
+**When to use it:** Low-traffic sites or development environments where downloading a MaxMind database is not practical.
+
+**Limitations:**
+- Free plan is limited to **45 requests per minute**
+- Each lookup has a **3-second timeout** — slow responses fall back gracefully without blocking the redirect
+- Lookups are cached per IP for 24 hours to minimize API calls, but high-traffic bursts can still hit the rate limit
+
+---
+
+## Configuration Summary
+
+```bash
+# Enable Geo-IP (default: true)
+SHORT_URL_GEO_IP=true
+
+# Choose your driver: headers | maxmind | ip-api (default: headers)
+SHORT_URL_GEO_IP_DRIVER=maxmind
+
+# MaxMind database path (only used when driver=maxmind)
+SHORT_URL_MAXMIND_DB=/var/www/app/storage/geoip/GeoLite2-Country.mmdb
+
+# Trust CDN proxy headers for real IP/country (only used when driver=headers)
+SHORT_URL_TRUST_CDN_HEADERS=true
+
+# Dashboard chart cache TTL in seconds (default: 300)
+SHORT_URL_STATS_CACHE_TTL=300
+```
+
+## Driver Comparison
+
+<CardGroup cols={3}>
+  <Card title="headers" icon="bolt">
+    **Best latency.** Zero external calls. Requires a CDN like Cloudflare or CloudFront. Only reliable when `SHORT_URL_TRUST_CDN_HEADERS=true`.
+  </Card>
+  <Card title="maxmind" icon="database">
+    **Best for production.** Offline, GDPR-safe, no rate limits. Requires a free MaxMind account and a periodic database refresh.
+  </Card>
+  <Card title="ip-api" icon="globe">
+    **Easiest setup.** No account or file needed. Free but rate-limited to 45 req/min. Best for low-traffic or development use.
+  </Card>
+</CardGroup>

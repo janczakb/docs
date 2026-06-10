@@ -1,0 +1,241 @@
+---
+title: "PUT /api/short-url/links/{idOrKey} — Update a Short Link"
+sidebarTitle: "Update Link"
+description: "Update an existing short link by numeric ID or URL key. Use PUT for full replacement or PATCH for partial field updates without touching the rest."
+---
+
+Use this endpoint to modify an existing short link. You can identify the link by its numeric database ID or its URL key slug in the path. Both `PUT` and `PATCH` are accepted — the validation logic is the same for both, but by convention you should use `PATCH` when you only want to update a subset of fields and leave everything else untouched. You only need to include the fields you want to change; omitted fields retain their current values.
+
+## Endpoint
+
+```
+PUT   /api/short-url/links/{idOrKey}
+PATCH /api/short-url/links/{idOrKey}
+```
+
+**Required scope:** `links:read-write`  
+**Success response:** `200 OK`
+
+## Path Parameters
+
+<ParamField path="idOrKey" type="string | integer" required>
+  The short link's numeric database ID (e.g. `43`) or URL key slug (e.g. `summer26`).
+</ParamField>
+
+## Request Body
+
+All fields are optional for `PATCH` requests. Include only the ones you want to change.
+
+<Note>
+  The `url_key` field's uniqueness check automatically excludes the link you are updating, so you can send the existing key without triggering a conflict error.
+</Note>
+
+### Destination
+
+<ParamField body="destination_type" type="string">
+  `single` or `split`. Changing this field revalidates `destination_url` and `rotation_variants` accordingly.
+</ParamField>
+
+<ParamField body="destination_url" type="string">
+  The new target URL. Required when `destination_type` is `single`. Max 2048 characters, checked against Google Safe Browsing.
+</ParamField>
+
+<ParamField body="rotation_variants" type="array">
+  Array of 2–5 variant objects (`label`, `url`, `weight`). Required when `destination_type` is `split`. Variant weights must sum to exactly 100.
+</ParamField>
+
+### Identity & Domain
+
+<ParamField body="url_key" type="string">
+  New URL slug. `alpha_dash`, max 32 characters, must be unique (excluding this link's current key).
+</ParamField>
+
+<ParamField body="custom_domain_id" type="integer">
+  ID of a verified custom domain. Set to `null` to revert to the default domain.
+</ParamField>
+
+### Behaviour
+
+<ParamField body="is_enabled" type="boolean">
+  Activate or deactivate the link.
+</ParamField>
+
+<ParamField body="redirect_status_code" type="integer">
+  `301` or `302`.
+</ParamField>
+
+<ParamField body="single_use" type="boolean">
+  Enable or disable single-use mode.
+</ParamField>
+
+<ParamField body="forward_query_params" type="boolean">
+  Enable or disable query parameter forwarding to the destination.
+</ParamField>
+
+<ParamField body="password" type="string">
+  Update or clear the access password. Max 255 characters.
+</ParamField>
+
+<ParamField body="show_warning_page" type="boolean">
+  Toggle the redirect warning interstitial.
+</ParamField>
+
+<ParamField body="auto_open_app_mobile" type="boolean">
+  Toggle native app auto-open for mobile visitors.
+</ParamField>
+
+### Limits & Expiration
+
+<ParamField body="max_visits" type="integer">
+  Update the click limit. Set to `null` to remove the limit. Min: `1`.
+</ParamField>
+
+<ParamField body="activated_at" type="string">
+  New activation date (ISO 8601). When changing `activated_at`, if you don't also send `expires_at`, the current `expires_at` value is automatically included in validation to preserve the existing expiration constraint.
+</ParamField>
+
+<ParamField body="expires_at" type="string">
+  New expiration date (ISO 8601). Must be greater than or equal to `activated_at`. When changing `expires_at`, if you don't also send `activated_at`, the current `activated_at` value is automatically included in validation.
+</ParamField>
+
+<ParamField body="expiration_redirect_url" type="string">
+  Update the fallback URL for expired/deactivated links. Max 255 characters.
+</ParamField>
+
+### Tracking & Analytics
+
+<ParamField body="ga_tracking_id" type="string">
+  Link-level GA4 Measurement ID. Format: `G-XXXXXXXXXX`.
+</ParamField>
+
+<ParamField body="webhook_url" type="string">
+  Update the per-link webhook endpoint. Set to `null` to revert to the global webhook.
+</ParamField>
+
+<ParamField body="track_visits" type="boolean">Master analytics toggle.</ParamField>
+<ParamField body="track_ip_address" type="boolean">Toggle IP address recording.</ParamField>
+<ParamField body="track_browser" type="boolean">Toggle browser name recording.</ParamField>
+<ParamField body="track_browser_version" type="boolean">Toggle browser version recording.</ParamField>
+<ParamField body="track_operating_system" type="boolean">Toggle OS recording.</ParamField>
+<ParamField body="track_operating_system_version" type="boolean">Toggle OS version recording.</ParamField>
+<ParamField body="track_device_type" type="boolean">Toggle device type recording.</ParamField>
+<ParamField body="track_referer_url" type="boolean">Toggle referrer URL recording.</ParamField>
+<ParamField body="track_browser_language" type="boolean">Toggle browser language recording.</ParamField>
+
+### Targeting & Retargeting
+
+<ParamField body="targeting_rules" type="array">
+  Replace the full targeting rules array. Pass an empty array (`[]`) to remove all rules. Each rule follows the same schema as the create endpoint.
+</ParamField>
+
+<ParamField body="pixels" type="array">
+  Replace the attached pixel IDs. The provided array **replaces** all existing pixel associations (sync, not append). Pass an empty array (`[]`) to detach all pixels.
+</ParamField>
+
+### Metadata
+
+<ParamField body="notes" type="string">
+  Update internal admin notes. Max 255 characters.
+</ParamField>
+
+## Example Requests
+
+<CodeGroup>
+```bash PATCH — partial update
+curl -X PATCH https://yourdomain.com/api/short-url/links/summer26 \
+  -H "Authorization: Bearer YOUR_API_KEY" \
+  -H "Content-Type: application/json" \
+  -H "Accept: application/json" \
+  -d '{
+    "expires_at": "2026-10-01",
+    "notes": "Extended to October"
+  }'
+```
+
+```bash PUT — enable and change destination
+curl -X PUT https://yourdomain.com/api/short-url/links/43 \
+  -H "Authorization: Bearer YOUR_API_KEY" \
+  -H "Content-Type: application/json" \
+  -H "Accept: application/json" \
+  -d '{
+    "destination_url": "https://example.com/new-landing-page",
+    "is_enabled": true,
+    "notes": "Updated destination for Q3 campaign"
+  }'
+```
+
+```bash PATCH — disable the link
+curl -X PATCH https://yourdomain.com/api/short-url/links/summer26 \
+  -H "Authorization: Bearer YOUR_API_KEY" \
+  -H "Content-Type: application/json" \
+  -H "Accept: application/json" \
+  -d '{
+    "is_enabled": false
+  }'
+```
+</CodeGroup>
+
+## Example Response
+
+<CodeGroup>
+```json 200 OK
+{
+  "message": "Short URL updated successfully.",
+  "data": {
+    "id": 43,
+    "destination_type": "single",
+    "destination_url": "https://example.com/products/summer-sale",
+    "rotation_variants": null,
+    "custom_domain_id": null,
+    "url_key": "summer26",
+    "short_url": "https://yourdomain.com/s/summer26",
+    "is_enabled": true,
+    "redirect_status_code": 302,
+    "total_visits": 150,
+    "unique_visits": 98,
+    "max_visits": null,
+    "activated_at": null,
+    "expires_at": "2026-10-01T00:00:00+00:00",
+    "webhook_url": null,
+    "targeting_rules": [],
+    "password": null,
+    "show_warning_page": false,
+    "auto_open_app_mobile": false,
+    "ga_tracking_id": null,
+    "track_visits": true,
+    "track_ip_address": true,
+    "track_browser": true,
+    "track_browser_version": true,
+    "track_operating_system": true,
+    "track_operating_system_version": true,
+    "track_device_type": true,
+    "track_referer_url": true,
+    "track_browser_language": true,
+    "pixels": [],
+    "notes": "Extended to October",
+    "created_at": "2026-06-15T09:00:00+00:00"
+  }
+}
+```
+
+```json 404 Not Found
+{
+  "message": "Short URL not found."
+}
+```
+
+```json 422 Validation Error
+{
+  "message": "The expires at field must be a date after or equal to activated at.",
+  "errors": {
+    "expires_at": [
+      "The expires at field must be a date after or equal to activated at."
+    ]
+  }
+}
+```
+</CodeGroup>
+
+<Tip>
+  When you update only `expires_at` without sending `activated_at`, the API automatically merges in the existing `activated_at` value so the `after_or_equal` validation can run correctly. You don't need to re-send the field just to pass validation.
+</Tip>

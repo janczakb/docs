@@ -1,0 +1,296 @@
+---
+title: "POST /api/short-url/links — Create a Short Link"
+sidebarTitle: "Create Link"
+description: "Create a new short link with optional custom slug, targeting rules, retargeting pixels, expiration dates, A/B split testing, and granular tracking settings."
+---
+
+Send a `POST` request to create a new short link. At minimum you must supply a `destination_url` when using the default `single` destination type. All other fields are optional — the API auto-generates a collision-free Base62 URL key if you don't provide one. Every URL you submit (destination, A/B variants, and targeting rule URLs) is checked against Google Safe Browsing before the link is saved.
+
+## Endpoint
+
+```
+POST /api/short-url/links
+```
+
+**Required scope:** `links:read-write`  
+**Success response:** `201 Created`
+
+## Request Body
+
+### Destination
+
+<ParamField body="destination_url" type="string" required>
+  The target URL visitors are sent to. Must be a valid URL, max 2048 characters. Required when `destination_type` is `single`. Checked against Google Safe Browsing on every save.
+</ParamField>
+
+<ParamField body="destination_type" type="string" default="single">
+  Controls the redirect behaviour. Use `single` for a single destination URL or `split` for weighted A/B traffic rotation. When set to `split`, omit `destination_url` and provide `rotation_variants` instead.
+</ParamField>
+
+<ParamField body="rotation_variants" type="array">
+  Required when `destination_type` is `split`. An array of 2–5 variant objects, each with the following keys:
+
+  | Key | Type | Description |
+  |-----|------|-------------|
+  | `label` | string | Human-readable variant name, max 100 chars |
+  | `url` | string | Target URL for this variant (max 2048 chars, Safe Browsing checked) |
+  | `weight` | integer | Traffic share (0–100). All variant weights must sum to exactly 100 |
+</ParamField>
+
+### Identity & Domain
+
+<ParamField body="url_key" type="string">
+  Custom URL slug. Alphanumeric characters and dashes only (`alpha_dash`), max 32 characters. Must be unique across all links. If omitted, the API auto-generates a Base62 key.
+</ParamField>
+
+<ParamField body="custom_domain_id" type="integer">
+  ID of a verified and active custom domain to use for this link. The domain must be registered, DNS-verified, and active in the Custom Domains manager. Omit to use your default domain.
+</ParamField>
+
+### Behaviour
+
+<ParamField body="is_enabled" type="boolean" default="true">
+  Whether the link is immediately active after creation.
+</ParamField>
+
+<ParamField body="redirect_status_code" type="integer" default="302">
+  HTTP redirect code to use. Accepted values: `301` (permanent) or `302` (temporary). Use `302` unless you have a specific reason for a permanent redirect — browsers cache `301` responses, which prevents analytics from logging repeat visits.
+</ParamField>
+
+<ParamField body="single_use" type="boolean">
+  When `true`, the link deactivates automatically after the first successful visitor click.
+</ParamField>
+
+<ParamField body="forward_query_params" type="boolean">
+  When `true`, any query string parameters on the incoming request (UTM tags, ad tokens, discount codes) are appended to the destination URL.
+</ParamField>
+
+<ParamField body="password" type="string">
+  A plain-text password visitors must enter before being redirected. Max 255 characters. The unlock state is stored in the visitor's PHP session so they are only prompted once per session.
+</ParamField>
+
+<ParamField body="show_warning_page" type="boolean">
+  When `true`, visitors see a safety interstitial page showing the destination URL before being redirected.
+</ParamField>
+
+<ParamField body="auto_open_app_mobile" type="boolean">
+  When `true`, mobile visitors are shown an interstitial that attempts to open the destination directly in a matching native app (24+ apps supported).
+</ParamField>
+
+### Limits & Expiration
+
+<ParamField body="max_visits" type="integer">
+  Maximum total visits allowed before the link auto-deactivates. Must be at least `1`. Omit for unlimited visits.
+</ParamField>
+
+<ParamField body="activated_at" type="string">
+  ISO 8601 date on which the link becomes active. Must be today or a future date.
+</ParamField>
+
+<ParamField body="expires_at" type="string">
+  ISO 8601 date on which the link stops working. Must be greater than or equal to `activated_at`. Omit for no expiration.
+</ParamField>
+
+<ParamField body="expiration_redirect_url" type="string">
+  URL to redirect visitors to when the link has expired, been deactivated, or reached `max_visits`. Max 255 characters. If omitted, visitors see the branded expiry page.
+</ParamField>
+
+### Tracking & Analytics
+
+<ParamField body="ga_tracking_id" type="string">
+  GA4 Measurement ID for server-side tracking on this specific link. Format: `G-XXXXXXXXXX` (max 50 characters). Overrides the global GA4 setting for this link only.
+</ParamField>
+
+<ParamField body="webhook_url" type="string">
+  Per-link webhook URL. When set, click events for this link are sent here regardless of the global webhook configuration. Max 2048 characters.
+</ParamField>
+
+<ParamField body="track_visits" type="boolean">
+  Master toggle for analytics logging on this link. When `false`, no visit data is recorded.
+</ParamField>
+
+<ParamField body="track_ip_address" type="boolean">
+  Record the visitor's IP address (stored hashed for GDPR compliance when IP anonymisation is enabled).
+</ParamField>
+
+<ParamField body="track_browser" type="boolean">
+  Record the visitor's browser name.
+</ParamField>
+
+<ParamField body="track_browser_version" type="boolean">
+  Record the visitor's browser version.
+</ParamField>
+
+<ParamField body="track_operating_system" type="boolean">
+  Record the visitor's operating system.
+</ParamField>
+
+<ParamField body="track_operating_system_version" type="boolean">
+  Record the visitor's operating system version.
+</ParamField>
+
+<ParamField body="track_device_type" type="boolean">
+  Record the visitor's device type (`desktop`, `mobile`, or `tablet`).
+</ParamField>
+
+<ParamField body="track_referer_url" type="boolean">
+  Record the HTTP `Referer` header from the visitor's request.
+</ParamField>
+
+<ParamField body="track_browser_language" type="boolean">
+  Record the visitor's preferred browser language from the `Accept-Language` header.
+</ParamField>
+
+### Targeting & Retargeting
+
+<ParamField body="targeting_rules" type="array">
+  Array of up to 10 smart targeting rule objects. Each rule redirects matching visitors to a specific destination URL instead of the default one. Rules are evaluated in order — the first matching rule wins.
+
+  Each rule object accepts:
+
+  | Key | Type | Description |
+  |-----|------|-------------|
+  | `match` | string | `and` (all filters must match) or `or` (any filter can match) |
+  | `destination_type` | string | `single` or `split` for per-rule A/B testing |
+  | `url` | string | Destination URL for this rule (required when `destination_type` is `single`) |
+  | `variants` | array | A/B variants array (required when `destination_type` is `split`) |
+  | `filters` | array | One or more filter objects (required) |
+
+  **Filter types:** `device` (devices: `desktop`, `mobile`, `tablet`), `platform` (platforms: `windows`, `mac`, `linux`, `ios`, `android`, `fire_os`), `country` (countries: ISO-3166-1 alpha-2 codes), `language` (languages: ISO-639-1 codes). Each filter type may only appear once per rule.
+</ParamField>
+
+<ParamField body="pixels" type="array">
+  Array of integer pixel IDs from your Pixel Registry to attach to this link. Example: `[1, 3]`. Pixel scripts fire client-side on each visit.
+</ParamField>
+
+### Metadata
+
+<ParamField body="notes" type="string">
+  Internal admin notes for this link. Max 255 characters. Never shown to visitors.
+</ParamField>
+
+## Example Requests
+
+<CodeGroup>
+```bash Minimal — destination URL only
+curl -X POST https://yourdomain.com/api/short-url/links \
+  -H "Authorization: Bearer YOUR_API_KEY" \
+  -H "Content-Type: application/json" \
+  -H "Accept: application/json" \
+  -d '{
+    "destination_url": "https://example.com/products/summer-sale"
+  }'
+```
+
+```bash With custom slug, expiry, and pixels
+curl -X POST https://yourdomain.com/api/short-url/links \
+  -H "Authorization: Bearer YOUR_API_KEY" \
+  -H "Content-Type: application/json" \
+  -H "Accept: application/json" \
+  -d '{
+    "destination_url": "https://example.com/products/summer-sale",
+    "url_key": "summer26",
+    "notes": "Summer campaign 2026",
+    "expires_at": "2026-09-01",
+    "pixels": [1, 2]
+  }'
+```
+
+```bash A/B split test
+curl -X POST https://yourdomain.com/api/short-url/links \
+  -H "Authorization: Bearer YOUR_API_KEY" \
+  -H "Content-Type: application/json" \
+  -H "Accept: application/json" \
+  -d '{
+    "destination_type": "split",
+    "url_key": "ab-test",
+    "rotation_variants": [
+      { "label": "Variant A", "url": "https://example.com/page-a", "weight": 70 },
+      { "label": "Variant B", "url": "https://example.com/page-b", "weight": 30 }
+    ]
+  }'
+```
+
+```bash With targeting rules
+curl -X POST https://yourdomain.com/api/short-url/links \
+  -H "Authorization: Bearer YOUR_API_KEY" \
+  -H "Content-Type: application/json" \
+  -H "Accept: application/json" \
+  -d '{
+    "destination_url": "https://example.com/default",
+    "url_key": "promo-global",
+    "targeting_rules": [
+      {
+        "match": "and",
+        "url": "https://example.com/pl-mobile",
+        "filters": [
+          { "type": "country", "data": { "countries": ["PL"] } },
+          { "type": "device", "data": { "devices": ["mobile"] } }
+        ]
+      }
+    ]
+  }'
+```
+</CodeGroup>
+
+## Example Response
+
+<CodeGroup>
+```json 201 Created
+{
+  "message": "Short URL created successfully.",
+  "data": {
+    "id": 43,
+    "destination_type": "single",
+    "destination_url": "https://example.com/products/summer-sale",
+    "rotation_variants": null,
+    "custom_domain_id": null,
+    "url_key": "summer26",
+    "short_url": "https://yourdomain.com/s/summer26",
+    "is_enabled": true,
+    "redirect_status_code": 302,
+    "total_visits": 0,
+    "unique_visits": 0,
+    "max_visits": null,
+    "activated_at": null,
+    "expires_at": "2026-09-01T00:00:00+00:00",
+    "webhook_url": null,
+    "targeting_rules": [],
+    "password": null,
+    "show_warning_page": false,
+    "auto_open_app_mobile": false,
+    "ga_tracking_id": null,
+    "track_visits": true,
+    "track_ip_address": true,
+    "track_browser": true,
+    "track_browser_version": true,
+    "track_operating_system": true,
+    "track_operating_system_version": true,
+    "track_device_type": true,
+    "track_referer_url": true,
+    "track_browser_language": true,
+    "pixels": [
+      { "id": 1, "name": "Meta Pixel", "type": "meta", "pixel_id": "123456789", "is_active": true },
+      { "id": 2, "name": "LinkedIn Insight", "type": "linkedin", "pixel_id": "987654", "is_active": true }
+    ],
+    "notes": "Summer campaign 2026",
+    "created_at": "2026-06-15T09:00:00+00:00"
+  }
+}
+```
+
+```json 422 Validation Error
+{
+  "message": "The destination url field is required.",
+  "errors": {
+    "destination_url": [
+      "The destination url field is required."
+    ]
+  }
+}
+```
+</CodeGroup>
+
+<Note>
+  All URLs you supply — including variant URLs and targeting rule URLs — are checked against the Google Safe Browsing API before the link is saved. If any URL is flagged as unsafe, the request returns a `422` error with a description of which field failed the check. You can disable Safe Browsing checks in **Settings → Security**.
+</Note>

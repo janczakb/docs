@@ -1,0 +1,125 @@
+---
+title: "Laravel Events Fired by Filament Short URL"
+sidebarTitle: "Events"
+description: "Learn how to listen to the ShortUrlVisited event to trigger custom logic — Slack alerts, CRM syncs, or email notifications — after every recorded visit."
+---
+
+The plugin fires a standard Laravel event after each visit is recorded. You can attach any number of listeners to respond with custom business logic — without touching the plugin's source code or overriding any controllers.
+
+---
+
+## `ShortUrlVisited`
+
+The `Bjanczak\FilamentShortUrl\Events\ShortUrlVisited` event is dispatched inside the queued visit-recording job, after the visit row has been written to the database. It carries two public properties: the short URL model and the visit model.
+
+<Tip>
+  Because the event fires inside a queued job, your listeners run in the background too — no listener execution time adds latency to the visitor's redirect. This makes `ShortUrlVisited` ideal for real-time integrations like Slack webhooks, live dashboards, or CRM pipelines without needing to poll the database.
+</Tip>
+
+### Event payload properties
+
+| Property | Type | Description |
+|---|---|---|
+| `$event->shortUrl` | `ShortUrl` | The short URL model instance. Includes `id`, `url_key`, `destination_url`, `total_visits`, `unique_visits`, and all other model attributes. |
+| `$event->visit` | `ShortUrlVisit` | The newly recorded visit model. Contains `visited_at`, `ip_address`, `country`, `country_code`, `city`, `browser`, `browser_version`, `operating_system`, `operating_system_version`, `device_type`, `referer_url`, `referer_host`, `utm_source`, `utm_medium`, `utm_campaign`, `utm_term`, `utm_content`, `browser_language`, `is_qr_scan`, and `selected_variant`. |
+
+---
+
+## Listening With a Closure
+
+You can register a quick closure-based listener in a service provider's `boot()` method or directly in `routes/console.php`:
+
+```php
+use Bjanczak\FilamentShortUrl\Events\ShortUrlVisited;
+use Illuminate\Support\Facades\Event;
+
+Event::listen(ShortUrlVisited::class, function (ShortUrlVisited $event) {
+    $event->shortUrl; // The ShortUrl model instance
+    $event->visit;    // The ShortUrlVisit model
+                      // (contains resolved IP, country, device, browser, OS, referrer)
+});
+```
+
+---
+
+## Listening With a Dedicated Listener Class
+
+For production use, register a named listener class in your `EventServiceProvider`. This approach is cleaner, testable, and supports Laravel's event discovery:
+
+```php
+// app/Providers/EventServiceProvider.php
+
+protected $listen = [
+    \Bjanczak\FilamentShortUrl\Events\ShortUrlVisited::class => [
+        \App\Listeners\NotifyOnVisit::class,
+    ],
+];
+```
+
+Then create the listener:
+
+```php
+// app/Listeners/NotifyOnVisit.php
+
+namespace App\Listeners;
+
+use Bjanczak\FilamentShortUrl\Events\ShortUrlVisited;
+
+class NotifyOnVisit
+{
+    public function handle(ShortUrlVisited $event): void
+    {
+        $key     = $event->shortUrl->url_key;
+        $country = $event->visit->country;
+        $browser = $event->visit->browser;
+
+        // Example: send a Slack notification
+        \Illuminate\Support\Facades\Http::post(config('services.slack.webhook'), [
+            'text' => "Link `{$key}` was clicked from {$country} ({$browser}).",
+        ]);
+    }
+}
+```
+
+---
+
+## Practical Use Cases
+
+<CardGroup cols={2}>
+  <Card title="Slack / Discord Alerts" icon="bell">
+    Notify your team immediately when a specific campaign link is clicked, including country and device data.
+  </Card>
+  <Card title="CRM Lead Tracking" icon="user">
+    Push click events to HubSpot, Salesforce, or any CRM via their API, enriched with UTM parameters from the visit.
+  </Card>
+  <Card title="Email Triggers" icon="envelope">
+    Fire a follow-up email sequence when a prospect clicks a one-time-use link in your outbound campaign.
+  </Card>
+  <Card title="Custom Analytics" icon="chart-bar">
+    Stream visit data to your own data warehouse (BigQuery, ClickHouse, Snowflake) without polling the database.
+  </Card>
+</CardGroup>
+
+---
+
+## Queueable Listeners
+
+If your listener performs slow external API calls, make it queueable so it doesn't block the visit-recording job:
+
+```php
+use Illuminate\Contracts\Queue\ShouldQueue;
+
+class NotifyOnVisit implements ShouldQueue
+{
+    public string $queue = 'notifications';
+
+    public function handle(ShortUrlVisited $event): void
+    {
+        // Runs in a separate queue job
+    }
+}
+```
+
+<Note>
+  The `ShortUrlVisited` event uses Laravel's `SerializesModels` trait, so `$event->shortUrl` and `$event->visit` are safely serialized and re-hydrated from the database when a queueable listener picks them up.
+</Note>

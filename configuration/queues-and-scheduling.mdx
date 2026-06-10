@@ -1,0 +1,104 @@
+---
+title: "Queue and Scheduler Setup for Filament Short URL"
+sidebarTitle: "Queues & Scheduling"
+description: "Configure async queue workers for sub-20ms redirects and set up the Laravel scheduler for nightly data aggregation and buffered counter flushing."
+---
+
+Filament Short URL is designed to keep redirect response times under 20ms regardless of how much analytics work happens per click. It achieves this by dispatching all heavy work — visit tracking, Geo-IP lookups, GA4 Measurement Protocol hits, and webhook calls — as asynchronous jobs through the Laravel queue. The scheduler handles two maintenance tasks that run in the background: nightly data aggregation and (optionally) buffered counter flushing. This page explains how to configure both systems.
+
+## Queue Configuration
+
+Set the queue connection and queue name in your `.env`:
+
+```bash
+SHORT_URL_QUEUE=redis        # redis | database | sqs | beanstalkd | sync
+SHORT_URL_QUEUE_NAME=default
+```
+
+<Warning>
+The `sync` driver executes all jobs **synchronously** on the request thread before the visitor receives the redirect response. This is fine for local development but will slow down redirects in production. Use an async driver like `redis` or `database` for any production deployment.
+</Warning>
+
+After setting an async queue driver, ensure a queue worker is running on your server:
+
+```bash
+php artisan queue:work --queue=default
+```
+
+Replace `default` with your custom queue name if you set `SHORT_URL_QUEUE_NAME` to something else. For persistent background workers, use [Supervisor](https://laravel.com/docs/queues#supervisor-configuration) or a managed queue service.
+
+<Info>
+If a tracking job or webhook call fails (timeout, 500 error, etc.), it will **never** crash the visitor's redirect. All job execution points are wrapped in strict error boundaries — failures are logged silently and the visitor is redirected normally.
+</Info>
+
+## Counter Buffering (High-Traffic Sites)
+
+On very high-traffic deployments, incrementing visit count columns on every redirect can cause row-level locking and database contention. Counter buffering solves this by accumulating counts in the cache and flushing them to the database on a schedule.
+
+Enable counter buffering in `.env`:
+
+```bash
+SHORT_URL_COUNTER_BUFFERING=true
+```
+
+When enabled, click counts are written to the cache instead of the database on each visit. The `short-url:sync-counters` Artisan command flushes the accumulated counts to the database. The plugin schedules this command to run automatically every minute (see [Scheduler](#automatic-scheduler-registration) below).
+
+<Warning>
+If you enable counter buffering, you **must** ensure the `short-url:sync-counters` command runs regularly — either via the auto-scheduler or a manual cron entry. If the command never runs, visit counts will not be persisted to the database.
+</Warning>
+
+## Automatic Scheduler Registration
+
+As of **v1.3.0**, the plugin automatically registers its own scheduled tasks inside the service provider. You do not need to add any commands to `routes/console.php` or `app/Console/Kernel.php`.
+
+The two scheduled commands and their default schedules are:
+
+| Command | Schedule | Condition |
+|---|---|---|
+| `short-url:aggregate-and-prune` | Daily at 02:00 | Runs only when **Enable Daily Aggregation** is ON in Settings |
+| `short-url:sync-counters` | Every minute | Runs only when **Buffer Visit Counts in Cache** is ON in Settings |
+
+Both commands respect the Settings GUI toggles — if the corresponding toggle is off, the command exits immediately without doing any work.
+
+### Cron Entry (Required)
+
+For the auto-scheduler to fire, your server must run the standard Laravel Scheduler cron. Add this **single cron entry** once:
+
+```bash
+* * * * * cd /path-to-your-project && php artisan schedule:run >> /dev/null 2>&1
+```
+
+<Note>
+These commands execute synchronously within the `schedule:run` process. You do **not** need a separate queue worker (`php artisan queue:work`) to run them.
+</Note>
+
+## Manual Scheduling (Optional)
+
+If you prefer to control the schedule yourself — for example, to run aggregation at a different time or on a separate server — turn off the corresponding toggles in **Settings → Performance & Security**, then define the commands in `routes/console.php`:
+
+```php
+use Illuminate\Support\Facades\Schedule;
+
+// Flush buffered click counts to the database every minute
+Schedule::command('short-url:sync-counters')->everyMinute();
+
+// Aggregate daily stats and prune raw visit logs nightly
+Schedule::command('short-url:aggregate-and-prune')->dailyAt('02:00');
+```
+
+<Warning>
+If you define schedules manually while the Settings toggles are still **ON**, the commands will run twice — once from the plugin's auto-scheduler and once from your manual definition. Disable the Settings toggles to avoid duplicate execution.
+</Warning>
+
+## What Each Command Does
+
+<AccordionGroup>
+  <Accordion title="short-url:aggregate-and-prune">
+    Runs nightly at 02:00. It reads raw visit records, aggregates them into per-day summaries (totals, unique visitors, device breakdown, country, browser, OS, referrer, UTM, QR scans, and browser language), and then permanently deletes raw records older than `SHORT_URL_PRUNING_DAYS` (default: 90 days).
+
+    The aggregation queries run as optimized native `GROUP BY` SQL operations directly in the database, so memory usage stays near zero even at millions of rows.
+  </Accordion>
+  <Accordion title="short-url:sync-counters">
+    Runs every minute when counter buffering is enabled. It reads the accumulated `total_visits` and `unique_visits` increments from the cache and applies them to the database in a single atomic transaction. If the database write fails, the cache values are restored so no counts are lost.
+  </Accordion>
+</AccordionGroup>

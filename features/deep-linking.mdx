@@ -1,0 +1,150 @@
+---
+title: "Mobile Deep Linking and Native App Routing in Filament"
+sidebarTitle: "Deep Linking"
+description: "Route mobile visitors into native apps via custom URI schemes, or serve Apple and Android association files for OS-level universal link integration."
+---
+
+Deep linking lets your short URLs open native mobile apps instead of forcing visitors through a mobile browser. Filament Short URL supports two distinct levels of mobile app integration: **per-link auto-open** that detects mobile visitors and launches the matching app via a custom URI scheme, and **global domain association files** that enable OS-level universal links and Android App Links for seamless native handoffs without a browser intermediary.
+
+## Two Deep Linking Modes
+
+<CardGroup cols={2}>
+  <Card title="Mobile Auto-Open" icon="mobile-screen">
+    Per-link setting. Detect mobile visitors and launch the destination directly inside a native app using a custom URI scheme (e.g. `instagram://`, `youtube://`). Works for 24+ pre-configured apps. A glassmorphic redirect page serves as the fallback when the app is not installed.
+  </Card>
+  <Card title="Universal Links & App Links" icon="link">
+    Global setting, disabled by default. Serve `apple-app-site-association` and `assetlinks.json` from your domain root for OS-level native integration on iOS and Android.
+  </Card>
+</CardGroup>
+
+---
+
+## Mode 1 — Per-Link Mobile Auto-Open
+
+When you enable **Auto-open in native app on mobile** on a link, mobile visitors see a premium glassmorphic interstitial page that fires the corresponding custom URI scheme. If the app is installed, the OS hands off directly to it. If not, the page presents a fallback option to open in the browser.
+
+<Note>
+  Auto-open supports **24+ native apps** out of the box: Instagram, YouTube, Spotify, TikTok, WhatsApp, Twitter/X, Facebook, Snapchat, LinkedIn, Pinterest, Reddit, Telegram, Signal, Discord, Twitch, Netflix, Amazon, Airbnb, Uber, Lyft, DoorDash, Google Docs/Sheets/Slides/Maps, Messenger, Apple Music, TripAdvisor, StockX, Booking, and AliExpress. A fallback redirect page is always shown when the app is not installed on the visitor's device.
+</Note>
+
+The Filament link form includes a live **App Matching Preview** widget. As soon as you enter a destination URL that matches a supported app, it shows you the matched app's favicon and the calculated deep link scheme.
+
+### Enabling auto-open on a link
+
+<Steps>
+  <Step title="Open the link form">
+    Create a new short URL or edit an existing one in the Filament panel.
+  </Step>
+  <Step title="Go to the App Linking tab">
+    Click the **App Linking** tab inside the link creation or edit form.
+  </Step>
+  <Step title="Enable auto-open">
+    Toggle **Auto-open in native app on mobile** to ON.
+  </Step>
+  <Step title="Save">
+    Save the link. Mobile visitors will now see the native app interstitial on their next click.
+  </Step>
+</Steps>
+
+You can also set this field via the REST API by passing `"auto_open_app_mobile": true` in the request body when creating or updating a link.
+
+---
+
+## Mode 2 — Universal Links & Android App Links
+
+Universal Links (iOS) and Android App Links let the operating system open your short URLs directly in your own native app — bypassing the browser entirely. This requires you to host two domain association files at well-known paths on your domain.
+
+Filament Short URL serves both files automatically once you configure and enable the feature in the Settings panel.
+
+### Routes served
+
+| Path | Platform |
+|---|---|
+| `GET /.well-known/apple-app-site-association` | iOS Universal Links |
+| `GET /apple-app-site-association` | iOS (legacy path) |
+| `GET /.well-known/assetlinks.json` | Android App Links |
+
+### Enabling universal links
+
+<Steps>
+  <Step title="Open the Settings panel">
+    Navigate to **Settings** in your Filament sidebar under the Short URLs navigation group.
+  </Step>
+  <Step title="Go to the Deep Linking tab">
+    Click the **Deep Linking** tab inside Settings.
+  </Step>
+  <Step title="Enable deep linking files">
+    Toggle **Enable Deep Linking Files** to ON. You can also enable this via your `.env` file by setting `SHORT_URL_DEEP_LINKING_ENABLED=true`.
+  </Step>
+  <Step title="Configure apple-app-site-association">
+    Paste your iOS configuration JSON into the **apple-app-site-association** editor. The panel validates your JSON in real time before you save.
+
+    ```json
+    {
+      "applinks": {
+        "apps": [],
+        "details": [
+          {
+            "appID": "YOUR_TEAM_ID.com.yourcompany.app",
+            "paths": ["/s/*"]
+          }
+        ]
+      }
+    }
+    ```
+  </Step>
+  <Step title="Configure assetlinks.json">
+    Paste your Android Digital Asset Links JSON into the **assetlinks.json** editor.
+
+    ```json
+    [
+      {
+        "relation": ["delegate_permission/common.handle_all_urls"],
+        "target": {
+          "namespace": "android_app",
+          "package_name": "com.yourcompany.app",
+          "sha256_cert_fingerprints": [
+            "14:6D:E9:57:3E:28:B6:58:91:..."
+          ]
+        }
+      }
+    ]
+    ```
+  </Step>
+  <Step title="Save and verify">
+    Save your settings. The plugin immediately starts serving both files from the routes above. Verify by visiting `https://yourdomain.com/.well-known/apple-app-site-association` in a browser.
+  </Step>
+</Steps>
+
+<Warning>
+  Configure your `apple-app-site-association` and `assetlinks.json` content through the **Settings panel UI**, not by adding raw JSON to your `.env` file. Large multi-line JSON blocks in `.env` are error-prone and can cause environment parsing failures that silently break your application.
+</Warning>
+
+<Tip>
+  Both association files are served with `Content-Type: application/json` as required by Apple and Google. The plugin respects your route prefix setting — if you use a custom path prefix for short URLs (e.g. `/s/`), update the `paths` in your `apple-app-site-association` accordingly.
+</Tip>
+
+## Supported Apps
+
+The following native apps are pre-configured for URI scheme matching. When a destination URL matches one of these apps and auto-open is enabled, mobile visitors are routed directly into the app.
+
+<CardGroup cols={3}>
+  <Card title="Social" icon="share-nodes">
+    Instagram, TikTok, Twitter/X, Facebook, Snapchat, LinkedIn, Pinterest, Reddit, Discord, Signal, Telegram
+  </Card>
+  <Card title="Media & Entertainment" icon="play">
+    YouTube, Spotify, Twitch, Netflix, Apple Music
+  </Card>
+  <Card title="Commerce & Travel" icon="bag-shopping">
+    Amazon, Airbnb, Uber, Lyft, DoorDash, TripAdvisor, StockX, Booking, AliExpress
+  </Card>
+</CardGroup>
+
+## Feature Summary
+
+| Feature | Scope | Enabled by default |
+|---|---|---|
+| Auto-open in native app | Per link (`auto_open_app_mobile`) | No |
+| Glassmorphic fallback page | Per link (automatic) | Yes, when auto-open is ON |
+| `apple-app-site-association` serving | Global (Settings) | No |
+| `assetlinks.json` serving | Global (Settings) | No |

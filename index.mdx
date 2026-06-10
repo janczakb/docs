@@ -1,0 +1,85 @@
+---
+title: "Filament Short URL: Self-Hosted Link Management for Laravel"
+sidebarTitle: "Home"
+description: "Filament Short URL is a self-hosted URL shortener, QR code manager, and analytics plugin for Filament v5. Full link management, zero monthly fees."
+---
+
+Filament Short URL is a drop-in Laravel & Filament v5 plugin that gives you everything you need to manage short links at scale — custom domains, branded QR codes, multi-channel analytics, smart targeting rules, retargeting pixels, deep linking, a REST API, and HMAC-signed webhooks — all from a polished admin panel, entirely on your own server.
+
+<CardGroup cols={2}>
+  <Card title="Quick Start" icon="rocket" href="/quickstart">
+    Install the plugin and create your first short link in minutes.
+  </Card>
+  <Card title="Core Features" icon="star" href="/features/link-management">
+    Explore link management, QR codes, analytics, targeting, and more.
+  </Card>
+  <Card title="REST API" icon="code" href="/api/overview">
+    Manage links programmatically with the scoped REST API.
+  </Card>
+  <Card title="Configuration" icon="gear" href="/configuration/plugin-setup">
+    Customize the plugin to fit your Laravel application.
+  </Card>
+</CardGroup>
+
+## Why Filament Short URL?
+
+Filament Short URL is a self-hosted alternative to Bitly, Dub.co, and Rebrandly. You own your data, have no click limits, and pay $0 per month. It ships as a single Composer package that registers itself into any existing Filament v5 panel.
+
+<CardGroup cols={3}>
+  <Card title="Unlimited Links & Clicks" icon="infinity" href="/introduction">
+    No caps, no tiers. Create as many links as your database can hold.
+  </Card>
+  <Card title="Custom Domains" icon="globe" href="/introduction">
+    Serve links from your own branded domain with real-time DNS verification.
+  </Card>
+  <Card title="Advanced Analytics" icon="chart-line" href="/introduction">
+    Cross-filterable dashboards with geo maps, device breakdowns, and a live feed.
+  </Card>
+  <Card title="Smart Targeting" icon="bullseye" href="/introduction">
+    Route visitors by device, country, language, or A/B split weights.
+  </Card>
+  <Card title="QR Code Designer" icon="qrcode" href="/introduction">
+    SVG QR codes with custom dot styles, gradients, and logo overlays.
+  </Card>
+  <Card title="REST API & Webhooks" icon="plug" href="/introduction">
+    Scoped API keys, rate limits, and HMAC-signed webhook callbacks.
+  </Card>
+</CardGroup>
+
+## Get started in four steps
+
+<Steps>
+  <Step title="Install via Composer">
+    Add the package to your Laravel application:
+    ```bash
+    composer require janczakb/filament-short-url
+    ```
+  </Step>
+  <Step title="Publish and run migrations">
+    Publish the migration files and apply them to your database:
+    ```bash
+    php artisan vendor:publish --tag=filament-short-url-migrations
+    php artisan migrate
+    ```
+  </Step>
+  <Step title="Register the plugin">
+    Add the plugin to your Filament Panel Provider:
+    ```php
+    use Bjanczak\FilamentShortUrl\FilamentShortUrlPlugin;
+
+    public function panel(Panel $panel): Panel
+    {
+        return $panel->plugins([
+            FilamentShortUrlPlugin::make(),
+        ]);
+    }
+    ```
+  </Step>
+  <Step title="Create your first short link">
+    Open your Filament admin panel, navigate to **Short URLs**, and click **Create**. Enter your destination URL and save — your first short link is live.
+  </Step>
+</Steps>
+
+<Tip>
+  Read the [Quick Start guide](/quickstart) for a complete walkthrough including asset publishing, custom domains, and queue setup.
+</Tip>

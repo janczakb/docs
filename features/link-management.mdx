@@ -1,0 +1,123 @@
+---
+title: "Short Link Creation and Management in Filament Short URL"
+sidebarTitle: "Link Management"
+description: "Create, organize, and control short links with custom slugs, expiration rules, folders, tags, UTM builder, and Google Safe Browsing checks."
+---
+
+Filament Short URL gives you a complete link management workspace inside your Filament admin panel. From the moment you paste a destination URL to the day you archive a campaign link, every detail — slug, redirect code, expiry window, folder, tags, and creator — is tracked and editable without ever leaving the panel.
+
+## Creating a Short Link
+
+When you click **New Short URL**, the creation form opens with two required decisions: where the link points and what key it uses.
+
+<Steps>
+  <Step title="Enter the destination URL">
+    Paste the full destination URL into the **Destination URL** field. Filament Short URL automatically checks it against Google Safe Browsing on save and blocks the form if the URL is flagged as malware, phishing, or social engineering.
+  </Step>
+  <Step title="Choose a URL key">
+    Leave the **URL Key** field empty to auto-generate a collision-free Base62 key (a–z, A–Z, 0–9). At the default length of 6 characters that gives you **56 billion possible keys**. Type your own value to create a memorable custom slug such as `summer-sale` or `launch`.
+  </Step>
+  <Step title="Fill in optional details">
+    Add internal **Notes**, pick a **Folder**, assign up to five **Tags**, set the redirect status code, and configure any expiration or security options before saving.
+  </Step>
+</Steps>
+
+## Link Fields
+
+<CardGroup cols={2}>
+  <Card title="Notes" icon="pen-line">
+    Store internal context — campaign name, ticket number, or anything useful to your team. Notes are visible only in the admin panel and never exposed to visitors.
+  </Card>
+  <Card title="Enabled / Disabled toggle" icon="toggle-on">
+    Flip a link off instantly without deleting it. Disabled links return your configured expiry response instead of redirecting.
+  </Card>
+  <Card title="Redirect status code" icon="arrow-right-arrow-left">
+    Choose **302 (Temporary)** or **301 (Permanent)**. The default is 302 — browsers cache 301 responses, which can cause subsequent visits to bypass analytics.
+  </Card>
+  <Card title="Password protection" icon="lock">
+    Require visitors to enter a password before they are redirected. The unlock state is stored in the PHP session, so visitors only see the prompt once per session.
+  </Card>
+  <Card title="Redirect warning page" icon="triangle-exclamation">
+    Display a safety interstitial showing the destination URL before forwarding. Visitors choose **Continue** or **Go Back**. Confirmation is tracked via a `?confirmed=1` query parameter — no extra session storage needed.
+  </Card>
+  <Card title="Google Safe Browsing" icon="shield-check">
+    Every destination URL you create or edit is checked against Google's threat database in real time. The form blocks saving if the URL is flagged as unsafe.
+  </Card>
+</CardGroup>
+
+## Link Expiration and Caps
+
+You can set any combination of the following conditions. When any condition is met the link stops redirecting and either sends visitors to your fallback URL or shows the branded expiry page.
+
+| Field | What it does |
+|---|---|
+| `activated_at` | The link is inactive before this timestamp. |
+| `expires_at` | The link expires at this timestamp. |
+| `max_visits` | The link deactivates after this many total visits. |
+| Single-use mode | The link deactivates after the very first visit. |
+| Custom fallback URL | Visitors are redirected here instead of seeing the expiry page. |
+
+<Info>
+  Use **302** redirects on any link that has expiration or visit-cap logic. Browsers cache **301** responses locally and can bypass your tracking and deactivation checks entirely on repeat visits.
+</Info>
+
+## Query Parameter Forwarding
+
+Enable **Forward Query Parameters** on any link and all query strings the visitor arrives with — UTM parameters, ad tokens, discount codes, referral IDs — are automatically appended to the destination URL. You never need to pre-bake every combination of parameters into separate links.
+
+## Folders and Tags
+
+<CardGroup cols={2}>
+  <Card title="Folders" icon="folder">
+    Assign each link to one folder. Clicking a folder in the sidebar instantly filters the link list to show only that folder's links. The folder badge also shows a per-folder link count.
+  </Card>
+  <Card title="Tags" icon="tag">
+    Add up to five tags per link. Clicking any tag in the table navigates to a filtered list of all links sharing that tag. Tag counts are displayed next to each tag name.
+  </Card>
+</CardGroup>
+
+<Tip>
+  Use **folders** to separate projects or clients (e.g., `Brand A`, `Q4 Campaign`) and **tags** to cross-cut by channel or format (e.g., `email`, `paid`, `qr-only`). Together they let you find any subset of links in seconds without running a search.
+</Tip>
+
+## Link Archiving
+
+Instead of permanently deleting old links you can **archive** them. Archived links:
+
+- Are hidden from the default link list.
+- Continue to serve valid redirects if they are still active.
+- Can be restored at any time from the archived view in the Filament panel.
+
+Archiving is safer than deletion because it preserves analytics history and avoids returning a broken URL to anyone who bookmarked the link.
+
+## User Attribution
+
+Every link records the Filament user who created it. The list table shows the creator's **avatar**, name, and email in a hover card. Attribution is captured automatically via a model `creating` event — no extra steps needed.
+
+You can configure the user model, name column, email column, and avatar attribute in `config/filament-short-url.php` under the `user` key.
+
+## Keyboard Shortcuts
+
+<Note>
+  While hovering any row in the links table you can press a single key to trigger the most common actions instantly — no need to open the action dropdown.
+
+  | Key | Action |
+  |---|---|
+  | `E` | Open edit form |
+  | `Q` | Open QR code designer |
+  | `I` | Copy short URL to clipboard |
+  | `S` | Go to analytics / stats |
+  | `X` | Delete the link |
+
+  The same shortcuts are shown as badges inside the unified 3-dot action dropdown.
+</Note>
+
+## UTM Builder
+
+The **UTM Builder** panel lets you compose campaign URLs directly inside the link form. Fill in `utm_source`, `utm_medium`, `utm_campaign`, `utm_term`, and `utm_content` and the destination URL field updates in real time. Edit the destination URL directly and the UTM fields reflect the change immediately — the sync is fully bidirectional, so you never end up with mismatched values.
+
+## Custom Domains
+
+Each link can be served from a **verified custom domain** (e.g., `go.yourcompany.com/abc123`) instead of your default application domain. Select the domain from the **Custom Domain** dropdown when creating or editing a link.
+
+You must first register and verify the domain through the DNS verification flow. See the [Custom Domains configuration guide](/configuration/custom-domains) for step-by-step DNS setup instructions.

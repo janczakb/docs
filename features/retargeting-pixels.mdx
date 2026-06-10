@@ -1,0 +1,106 @@
+---
+title: "Retargeting Pixels: Fire Meta, Google, and More Per Link"
+sidebarTitle: "Retargeting Pixels"
+description: "Build remarketing audiences on Meta, Google, LinkedIn, TikTok, and Pinterest even when redirecting visitors to external domains you don't control."
+---
+
+Retargeting pixels let you fire marketing tracking scripts for every visitor who clicks a short link — even when the destination is an external domain like Amazon, Booking, or a partner's website where you can't install your own code. Filament Short URL achieves this with a brief interstitial page that executes your pixel scripts in the visitor's browser before transparently forwarding them to the destination URL.
+
+## How It Works
+
+When a visitor clicks a short link that has pixels attached, the redirect engine shows a lightweight interstitial page instead of immediately bouncing to the destination. That page loads and fires all configured pixel scripts — initializing the tracking libraries and registering the visit in your ad platforms — then performs a seamless `window.location.replace()` to send the visitor to their final destination. The entire process takes roughly 220–250ms.
+
+<Note>
+  The pixel interstitial page is intentionally transparent to the visitor. They see a brief animated loading indicator before being forwarded — they land on the destination as expected, and you capture the pixel event. The interstitial uses the same glassmorphic design as the password-protection and redirect-warning pages, supports dark mode automatically, and displays your site name and logo if configured.
+</Note>
+
+<Info>
+  Retargeting pixels fire **client-side** in the visitor's browser. This is completely separate from the server-side GA4 Measurement Protocol integration, which bypasses ad-blockers. Both systems work in parallel without interfering with each other.
+</Info>
+
+## Supported Pixel Providers
+
+| Provider | Type value | Script loaded |
+|---|---|---|
+| Meta / Facebook Ads | `meta` | `fbevents.js` via `fbq('init', ...)` |
+| Google Ads / GA4 | `google` | `gtag.js` via Google Tag Manager |
+| LinkedIn Insight Tag | `linkedin` | `insight.min.js` via LinkedIn |
+| TikTok Pixel | `tiktok` | TikTok Analytics pixel script |
+| Pinterest Tag | `pinterest` | Pinterest Tag pixel script |
+
+## Central Pixel Registry
+
+Instead of pasting a pixel ID into every link individually, you define each pixel once in the **Pixel Registry** and then attach it to as many links as you like via a simple checkbox list.
+
+<Tip>
+  Define all your active pixels in the registry once, then attach them to hundreds of links in seconds. When a pixel ID changes — for example after a Meta Ads account migration — you update it in one place and every link that uses it reflects the change immediately.
+</Tip>
+
+Each pixel record in the registry has:
+
+| Field | Description |
+|---|---|
+| **Name** | A human-readable label for your own reference (e.g. "Main Meta Pixel") |
+| **Type** | One of `meta`, `google`, `linkedin`, `tiktok`, or `pinterest` |
+| **Pixel ID** | The tracking ID provided by the ad platform |
+| **Active** | Toggle to enable or disable the pixel globally without detaching it from links |
+
+## Setting Up Pixels
+
+<Steps>
+  <Step title="Open the Pixel Registry">
+    Navigate to **Pixel Registry** in your Filament sidebar (under the same navigation group as your short links).
+  </Step>
+  <Step title="Create a pixel">
+    Click **New pixel**, choose the provider type, enter your pixel ID, give it a name, and save.
+  </Step>
+  <Step title="Repeat for each platform">
+    Create one registry entry per tracking pixel you want to use. You can have multiple pixels of the same type (for example, two separate Meta pixels for different brands).
+  </Step>
+</Steps>
+
+## Attaching Pixels to a Link
+
+<Steps>
+  <Step title="Open the link form">
+    Create a new short URL or edit an existing one in the Filament panel.
+  </Step>
+  <Step title="Go to the Marketing tab">
+    Click the **Marketing & API** tab inside the link form.
+  </Step>
+  <Step title="Select your pixels">
+    Check the pixels you want to fire for this link. All active pixels from the registry appear in the list.
+  </Step>
+  <Step title="Save">
+    Save the link. The selected pixels fire on every click from that point on.
+  </Step>
+</Steps>
+
+## Via the REST API
+
+Pass an array of pixel registry IDs in the `pixels` field when creating or updating a link.
+
+```json
+{
+  "destination_url": "https://example.com/product",
+  "url_key": "promo",
+  "pixels": [1, 3]
+}
+```
+
+The values in the `pixels` array are the integer IDs of records in your Pixel Registry. You can find these IDs in the **Pixel Registry** list inside the Filament panel.
+
+To attach pixels programmatically using Eloquent, use standard relationship syncing:
+
+```php
+use App\Models\ShortUrl;
+
+$shortUrl = ShortUrl::find($id);
+$shortUrl->pixels()->sync([$pixelId1, $pixelId2]);
+```
+
+## Privacy & Compliance
+
+<Warning>
+  You are responsible for ensuring that firing retargeting pixels complies with applicable privacy regulations (GDPR, CCPA, etc.) and your cookie consent mechanism. Make sure your consent banner covers the pixel providers you activate before a visitor is redirected.
+</Warning>

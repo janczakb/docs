@@ -1,0 +1,129 @@
+---
+title: "REST API Overview for Filament Short URL"
+sidebarTitle: "Overview"
+description: "A complete reference for the Filament Short URL REST API — base URL, authentication, scoped keys, rate limits, pagination, and error response format."
+---
+
+The Filament Short URL REST API lets you manage short links programmatically from any external system — CRMs, automation platforms like Zapier or Make, CI/CD pipelines, or custom integrations. Every API endpoint lives under the `/api/short-url/` prefix, returns JSON, and requires an API key for authentication. Before you can make any requests, you must enable the API in **Settings → API & Webhooks → REST API Access → Enable Developer REST API**. If the API is disabled, every endpoint returns `503 Service Unavailable` regardless of the key you provide.
+
+## Base URL
+
+All endpoints are relative to your own domain:
+
+```
+https://yourdomain.com/api/short-url
+```
+
+## Available Endpoints
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `GET` | `/api/short-url/links` | List all short links (paginated) |
+| `POST` | `/api/short-url/links` | Create a new short link |
+| `GET` | `/api/short-url/links/{idOrKey}` | Retrieve a single short link |
+| `PUT` / `PATCH` | `/api/short-url/links/{idOrKey}` | Update a short link |
+| `DELETE` | `/api/short-url/links/{idOrKey}` | Delete a short link |
+| `GET` | `/api/short-url/links/{idOrKey}/stats` | Retrieve analytics for a short link |
+
+## Authentication
+
+Every request must include your API key. You create and manage API keys in **Settings → API & Webhooks → Developer API Keys**. See the [Authentication](/api/authentication) page for full details.
+
+```bash
+Authorization: Bearer YOUR_API_KEY
+```
+
+The API also accepts the key via the `X-Api-Key` header as an alternative:
+
+```bash
+X-Api-Key: YOUR_API_KEY
+```
+
+## API Key Scopes
+
+Each key carries one of two scopes that control which operations it may perform:
+
+| Scope | Allowed Methods | Typical Use Case |
+|-------|-----------------|------------------|
+| `links:read-only` | `GET` only | Dashboards, reporting tools, read-only integrations |
+| `links:read-write` | `GET`, `POST`, `PUT`, `PATCH`, `DELETE` | Full automation, CRM sync, link management |
+
+A `links:read-only` key that attempts a write operation receives a `403 Forbidden` response immediately.
+
+## Rate Limiting
+
+The API enforces two layers of rate limiting:
+
+- **Global throttle** — 60 requests per minute applied to all API routes by default.
+- **Per-key rate limit** — each individual key can have its own requests-per-minute cap configured in **Settings → API & Webhooks → Developer API Keys**. The effective limit is the lower of the two values.
+
+When you exceed the rate limit, the API returns `429 Too Many Requests` with a `Retry-After` header indicating when you may retry.
+
+## Request Headers
+
+Include these headers on every request:
+
+| Header | Value | Required |
+|--------|-------|----------|
+| `Authorization` | `Bearer YOUR_API_KEY` | Required (or use `X-Api-Key`) |
+| `X-Api-Key` | `YOUR_API_KEY` | Alternative to `Authorization` |
+| `Accept` | `application/json` | Always |
+| `Content-Type` | `application/json` | POST / PUT / PATCH only |
+
+## Pagination
+
+The list endpoint (`GET /api/short-url/links`) returns paginated results of **30 items per page**, ordered by newest first. Use the `page` query parameter to navigate between pages. The response includes a `links` object with `first`, `last`, `prev`, and `next` cursor URLs, and a `meta` object with `current_page`, `last_page`, `per_page`, and `total`.
+
+## Response Format
+
+All successful responses wrap the payload in a `data` key. Write operations (`POST`, `PUT`/`PATCH`) also include a top-level `message` string. Errors follow a consistent structure with a `message` field and, for validation failures, an `errors` object.
+
+### Error Responses
+
+<CodeGroup>
+```json 401 Unauthenticated
+{
+  "error": "Unauthorized. API Key is missing."
+}
+```
+
+```json 403 Insufficient Scope
+{
+  "error": "Forbidden. This API key has read-only permissions."
+}
+```
+
+```json 422 Validation Error
+{
+  "message": "The destination url field is required.",
+  "errors": {
+    "destination_url": [
+      "The destination url field is required."
+    ]
+  }
+}
+```
+
+```json 503 API Disabled
+{
+  "error": "The Developer API is currently disabled. Enable it in Short URL Settings → API & Webhooks."
+}
+```
+</CodeGroup>
+
+### HTTP Status Code Reference
+
+| Code | Meaning |
+|------|---------|
+| `200 OK` | Request succeeded |
+| `201 Created` | Resource created successfully |
+| `401 Unauthorized` | Missing or invalid API key |
+| `403 Forbidden` | Key lacks the required scope |
+| `404 Not Found` | Short link does not exist |
+| `422 Unprocessable Entity` | Validation failed — check the `errors` field |
+| `429 Too Many Requests` | Rate limit exceeded |
+| `503 Service Unavailable` | REST API is disabled in Settings |
+
+<Info>
+  All timestamps in responses are ISO 8601 strings with timezone offset, for example `2026-06-15T10:00:00+00:00`.
+</Info>

@@ -1,0 +1,122 @@
+---
+title: "Link Analytics: Clicks, Devices, Geography, and More"
+sidebarTitle: "Analytics"
+description: "Explore per-link analytics dashboards with cross-filtering, a visitor world map, live activity feed, A/B charts, and GDPR-safe IP anonymization."
+---
+
+Filament Short URL records a rich set of signals on every visit and surfaces them in a per-link analytics dashboard. You can slice the data across any combination of dimensions — device, country, date range, referrer — and watch new visits stream in live, all without leaving your Filament admin panel.
+
+## Analytics Dashboard
+
+Open a link's analytics by clicking the row or pressing `S` while hovering it. The dashboard presents the following metrics:
+
+<CardGroup cols={3}>
+  <Card title="Total Visits" icon="chart-line">
+    The complete count of all recorded redirects for the link over the selected date range.
+  </Card>
+  <Card title="Unique Visits" icon="user">
+    Distinct visitors identified by their hashed IP address. Useful for gauging true reach vs. repeat clicks.
+  </Card>
+  <Card title="QR Scan Conversions" icon="qrcode">
+    Visits that arrived via a QR code scan, shown with a period-over-period delta so you can track growth over time.
+  </Card>
+  <Card title="Referrers" icon="arrow-pointer">
+    Breakdown of traffic sources by referrer URL host (e.g., `linkedin.com`, `t.co`).
+  </Card>
+  <Card title="Devices, Browsers & OSes" icon="laptop">
+    Visit distribution by device type (desktop, mobile, tablet), browser name + version, and OS name + version.
+  </Card>
+  <Card title="Countries & Cities" icon="earth-europe">
+    Geographic breakdown of visitors including country and city, powered by your configured Geo-IP driver.
+  </Card>
+  <Card title="Browser Languages" icon="language">
+    Top languages from visitor `Accept-Language` headers — helpful for planning localized landing pages.
+  </Card>
+  <Card title="UTM Parameters" icon="tags">
+    Aggregated breakdowns of `utm_source`, `utm_medium`, and `utm_campaign` values across all visits.
+  </Card>
+</CardGroup>
+
+<Info>
+  Analytics data is only as accurate as your Geo-IP configuration. Country and city data will be empty or incorrect if you have not set up a Geo-IP driver. See the [Geo-IP configuration guide](/configuration/geo-ip) to enable MaxMind offline lookups, Cloudflare/CloudFront header resolution, or ip-api.com as a fallback.
+</Info>
+
+## Cross-Filtering
+
+Every chart and table in the analytics dashboard is cross-filterable. Click any data point — a country, a browser, a referrer, a date — and all other charts update to show only visits matching that selection. You can combine multiple active filters to answer precise questions such as:
+
+> "Show me only mobile visits from Poland during May that came from LinkedIn."
+
+Filters are applied and removed by clicking the same element again. The active filter state is reflected in the URL so you can bookmark or share a pre-filtered view.
+
+## Visitor World Map
+
+The **Visitor World Map** renders an interactive SVG map of the world. Each country is shaded according to its relative click volume — darker shading indicates higher traffic. Hovering over any country shows its name, total visit count, and percentage share of traffic. This gives you an instant global overview without scanning through a country table.
+
+## Visit Logs
+
+The **Visit Logs** tab shows a paginated table of individual raw visit records. Every column captured at visit time is available:
+
+<Accordion title="Fields recorded per visit">
+  | Field | Description |
+  |---|---|
+  | `ip_address` | Visitor IP (optionally anonymized — see GDPR section below) |
+  | `browser` + `browser_version` | Parsed browser name and version |
+  | `operating_system` + `operating_system_version` | Parsed OS name and version |
+  | `device_type` | `desktop`, `mobile`, or `tablet` |
+  | `referer_url` + `referer_host` | Full referrer URL and its parsed hostname |
+  | `country` + `country_code` + `city` | Geo-IP resolved location |
+  | `utm_source`, `utm_medium`, `utm_campaign`, `utm_term`, `utm_content` | UTM parameters from the click URL |
+  | `browser_language` | Preferred language from `Accept-Language` header |
+  | `is_qr_scan` | `true` if the visit came from a QR code scan |
+  | `selected_variant` | The A/B variant resolved for this visit (if applicable) |
+  | `visited_at` | Precise timestamp of the visit |
+</Accordion>
+
+## Live Activity Feed
+
+The **Live Feed** page streams new visits in real time with an automatic 5-second refresh. It is designed to be lightweight — the dashboard only re-renders when new visits have actually arrived, so watching a quiet link wastes no resources. Polling also pauses automatically when you switch to another browser tab or scroll the widget out of view, then resumes the moment you return.
+
+The feed shows the 25 most recent visits with country flag, browser, device type, referrer, city, and a QR scan badge where applicable.
+
+## A/B Variant Analytics
+
+When you run an A/B split test on a link, the analytics dashboard adds a **Variant Clicks Distribution** chart. The chart shows the actual traffic share each variant received versus the configured weight — so you can quickly see whether traffic is distributing as expected and compare conversion outcomes across variants.
+
+The resolved variant is recorded on every raw visit, so the variant breakdown is also available in Visit Logs and through the REST API stats endpoint.
+
+## Bot and VPN Filtering
+
+<Note>
+  Bot filtering is **automatic and always on**. Visits from known crawlers (Googlebot, Bingbot, Applebot, curl, and dozens more), Tor exit nodes, anonymous proxies, and VPN services are silently excluded from all analytics counts and visit logs. You see only real human traffic — no configuration required.
+</Note>
+
+You can configure the VPN/proxy detection driver and choose between **Flag Only** (record the visit but mark it) or **Block Traffic** (return a 403 to the visitor) in **Settings → Security → VPN & Proxy Detection**.
+
+## GDPR IP Anonymization
+
+Enable **IP Anonymization** in **Settings → Tracking** to mask raw IP addresses before they are stored:
+
+- **IPv4** addresses are truncated so the last octet is zeroed out (e.g., `192.168.1.100` → `192.168.1.0`).
+- **IPv6** addresses are truncated to the first 64 bits.
+- A **SHA-256 hash** of the original IP is stored alongside the anonymized address, giving you accurate unique visitor counts without retaining any directly identifiable data.
+
+Anonymization applies prospectively to new visits. Existing visit records are not modified when you enable the setting.
+
+## Data Retention and Aggregation
+
+To keep your database lean without losing historical visibility, Filament Short URL automatically compresses older visit records into compact daily summaries each night:
+
+<Steps>
+  <Step title="Nightly aggregation">
+    The previous day's raw visits are rolled up into a single daily summary row, capturing counts per device, browser, OS, country, city, referrer, UTM parameter, language, and QR scans.
+  </Step>
+  <Step title="Pruning after the retention window">
+    Raw visit records older than the configured retention window are permanently deleted. The default retention period is **90 days**. Set the value to `0` to disable pruning and keep raw records indefinitely.
+  </Step>
+  <Step title="Transparent dashboard reads">
+    The analytics dashboard seamlessly merges historical daily summaries with today's live visits, so you always see a complete, accurate picture with no manual intervention required.
+  </Step>
+</Steps>
+
+Configure the retention window in **Settings → Performance & Security → Prune Raw Logs After** or via the `SHORT_URL_PRUNING_DAYS` environment variable.

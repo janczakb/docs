@@ -1,0 +1,203 @@
+---
+title: "GET /api/short-url/links/{idOrKey} — Retrieve a Short Link"
+sidebarTitle: "Get Link"
+description: "Retrieve a single short link by its numeric ID or URL key string. Returns the full link object including tracking flags, pixels, and targeting rules."
+---
+
+Use this endpoint to retrieve a single short link. You can look up a link by either its numeric database ID or its URL key slug — both are accepted interchangeably in the `{idOrKey}` path parameter. The response shape is identical to the items returned by the list endpoint.
+
+## Endpoint
+
+```
+GET /api/short-url/links/{idOrKey}
+```
+
+**Required scope:** `links:read-only` or `links:read-write`
+
+## Path Parameters
+
+<ParamField path="idOrKey" type="string | integer" required>
+  The short link's numeric database ID (e.g. `42`) or its URL key slug (e.g. `summer26`). When a numeric string is passed, the API resolves it as a database ID first. Use the URL key for human-readable lookups.
+</ParamField>
+
+## Example Requests
+
+<CodeGroup>
+```bash By numeric ID
+curl https://yourdomain.com/api/short-url/links/42 \
+  -H "Authorization: Bearer YOUR_API_KEY" \
+  -H "Accept: application/json"
+```
+
+```bash By URL key
+curl https://yourdomain.com/api/short-url/links/summer26 \
+  -H "Authorization: Bearer YOUR_API_KEY" \
+  -H "Accept: application/json"
+```
+</CodeGroup>
+
+## Example Response
+
+<CodeGroup>
+```json 200 OK
+{
+  "data": {
+    "id": 42,
+    "destination_type": "single",
+    "destination_url": "https://example.com/products/summer-sale",
+    "rotation_variants": null,
+    "custom_domain_id": null,
+    "url_key": "summer26",
+    "short_url": "https://yourdomain.com/s/summer26",
+    "is_enabled": true,
+    "redirect_status_code": 302,
+    "total_visits": 150,
+    "unique_visits": 98,
+    "max_visits": null,
+    "activated_at": null,
+    "expires_at": "2026-09-01T00:00:00+00:00",
+    "webhook_url": null,
+    "targeting_rules": [
+      {
+        "match": "and",
+        "url": "https://example.com/pl-mobile",
+        "filters": [
+          { "type": "country", "data": { "countries": ["PL"] } },
+          { "type": "device", "data": { "devices": ["mobile"] } }
+        ]
+      }
+    ],
+    "password": null,
+    "show_warning_page": false,
+    "auto_open_app_mobile": false,
+    "ga_tracking_id": null,
+    "track_visits": true,
+    "track_ip_address": true,
+    "track_browser": true,
+    "track_browser_version": true,
+    "track_operating_system": true,
+    "track_operating_system_version": true,
+    "track_device_type": true,
+    "track_referer_url": true,
+    "track_browser_language": true,
+    "pixels": [],
+    "notes": "Summer campaign 2026",
+    "created_at": "2026-06-15T09:00:00+00:00"
+  }
+}
+```
+
+```json 404 Not Found
+{
+  "message": "Short URL not found."
+}
+```
+</CodeGroup>
+
+## Response Fields
+
+<ResponseField name="data" type="object">
+  The short link object.
+
+  <Expandable title="data fields">
+    <ResponseField name="id" type="integer">
+      The unique numeric database ID.
+    </ResponseField>
+
+    <ResponseField name="destination_type" type="string">
+      `single` or `split`. When `split`, the `destination_url` is `null` and `rotation_variants` contains the A/B variants.
+    </ResponseField>
+
+    <ResponseField name="destination_url" type="string | null">
+      The target URL for `single` type links.
+    </ResponseField>
+
+    <ResponseField name="rotation_variants" type="array | null">
+      Array of A/B variant objects (`label`, `url`, `weight`) for `split` type links.
+    </ResponseField>
+
+    <ResponseField name="custom_domain_id" type="integer | null">
+      ID of the custom domain assigned to this link, or `null` for the default domain.
+    </ResponseField>
+
+    <ResponseField name="url_key" type="string">
+      The URL slug appended to the domain to form the short URL.
+    </ResponseField>
+
+    <ResponseField name="short_url" type="string">
+      The fully resolved short URL string including domain and prefix.
+    </ResponseField>
+
+    <ResponseField name="is_enabled" type="boolean">
+      `true` if the link is active and redirecting visitors.
+    </ResponseField>
+
+    <ResponseField name="redirect_status_code" type="integer">
+      HTTP redirect code used: `301` or `302`.
+    </ResponseField>
+
+    <ResponseField name="total_visits" type="integer">
+      Cumulative total visits recorded for this link.
+    </ResponseField>
+
+    <ResponseField name="unique_visits" type="integer">
+      Cumulative unique visitor count (identified by hashed IP).
+    </ResponseField>
+
+    <ResponseField name="max_visits" type="integer | null">
+      Click cap before auto-deactivation, or `null` for unlimited.
+    </ResponseField>
+
+    <ResponseField name="activated_at" type="string | null">
+      ISO 8601 activation timestamp, or `null` if active immediately.
+    </ResponseField>
+
+    <ResponseField name="expires_at" type="string | null">
+      ISO 8601 expiration timestamp, or `null` if it never expires.
+    </ResponseField>
+
+    <ResponseField name="webhook_url" type="string | null">
+      Per-link webhook endpoint for visit notifications.
+    </ResponseField>
+
+    <ResponseField name="targeting_rules" type="array | null">
+      Smart targeting rules array. Empty array when no rules are configured.
+    </ResponseField>
+
+    <ResponseField name="password" type="string | null">
+      Plain-text access password, or `null` if unprotected.
+    </ResponseField>
+
+    <ResponseField name="show_warning_page" type="boolean">
+      Whether an interstitial safety page is shown before redirecting.
+    </ResponseField>
+
+    <ResponseField name="auto_open_app_mobile" type="boolean">
+      Whether mobile visitors are prompted to open a native app.
+    </ResponseField>
+
+    <ResponseField name="ga_tracking_id" type="string | null">
+      Link-level GA4 Measurement ID, or `null` to use the global setting.
+    </ResponseField>
+
+    <ResponseField name="track_visits" type="boolean">
+      Master analytics toggle for this link.
+    </ResponseField>
+
+    <ResponseField name="pixels" type="array">
+      Attached retargeting pixel objects. Each contains `id`, `name`, `type`, `pixel_id`, and `is_active`.
+    </ResponseField>
+
+    <ResponseField name="notes" type="string | null">
+      Internal admin notes.
+    </ResponseField>
+
+    <ResponseField name="created_at" type="string">
+      ISO 8601 creation timestamp.
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+<Info>
+  The individual tracking flags (`track_ip_address`, `track_browser`, `track_browser_version`, `track_operating_system`, `track_operating_system_version`, `track_device_type`, `track_referer_url`, `track_browser_language`) are also present in the response object and each returns a `boolean`.
+</Info>

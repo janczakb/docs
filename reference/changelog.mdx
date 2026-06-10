@@ -1,0 +1,134 @@
+---
+title: "Filament Short URL Changelog and Release History"
+sidebarTitle: "Changelog"
+description: "Full release history for Filament Short URL — covering every major version from v1.2.0 through v5.0.0 with a summary of features added in each release."
+---
+
+Each release below is listed from newest to oldest. Expand a version to see the key changes introduced. Bug fixes and minor internal improvements are noted only when they have a user-visible impact.
+
+<AccordionGroup>
+
+  <Accordion title="v5.0.0 — Live Feed, Folders, Tags, and API Scopes">
+    - **Live Activity Feed** is now a full standalone page (`/{record}/stats/live`) with consistent tab navigation alongside Statistics and Visit Logs.
+    - The feed uses an O(1) `MAX(id)` poll — when nothing changes, Livewire returns a ~100-byte response, eliminating unnecessary rendering and DOM updates.
+    - A 3-second thundering-herd cache collapses concurrent admin users watching the same URL into one database query per window.
+    - Country flags in the live feed render via `flagcdn.com` images instead of emoji, with Alpine.js error handling for broken images.
+    - **Folders** — Assign each short URL to a folder; clicking a folder in the sidebar filters the link list and shows the link count per folder.
+    - **Tags** — Attach up to 5 tags per link; clicking a tag filters the link list to that tag.
+    - **Archiving** — Soft-archive links instead of deleting them; archived links are hidden by default and fully restorable.
+    - **API key scopes** — Each API key now supports `links:read-only` (GET only) or `links:read-write` (full CRUD); write attempts with a read-only key return `403 Forbidden`.
+    - **Per-key rate limiting** — Set an individual request-per-minute cap on each API key independently of the global route throttle.
+  </Accordion>
+
+  <Accordion title="v4.0.0 — Custom Domain Branding">
+    - **Custom Domains** — Connect branded domains (e.g. `go.company.com`) with real-time CNAME/A record DNS verification and automatic root-level routing without a `/s/` prefix.
+    - DNS verification uses PHP's native `dns_get_record()` with a `dig` CLI fallback.
+    - Fixed a critical caching bug where single-use links could be visited multiple times during the cache TTL window.
+    - Daily aggregation SQL queries now filter only active URL IDs, leveraging composite indexes for better performance.
+    - Logo upload API is secured with resource-level permission and policy checks.
+    - Settings overrides are deferred to the service provider boot phase to prevent database errors during offline config caching.
+    - Added a configurable toggle to disable the global fallback redirection route registration.
+  </Accordion>
+
+  <Accordion title="v3.5.0 — User Attribution, A/B Testing, and GDPR IP Anonymization">
+    - **User Attribution** — Short URLs now record their creator; avatar and hover card (name + email) are displayed in the link list table.
+    - **Relative Date Badges** — Creation dates display compact relative strings (`2h`, `5d`, `3mo`) with the precise date visible on hover.
+    - **Keyboard Shortcuts** — Press `E`, `Q`, `I`, `S`, or `X` while hovering a table row to edit, view QR code, copy, view stats, or delete.
+    - Clicking a table row now navigates directly to the link's Statistics page.
+    - **A/B Split Testing** — Distribute traffic across 2–5 weighted variants at root level or nested inside targeting rules, with drag-based sliders and one-click weight balancing.
+    - Variant clicks are tracked and displayed as a distribution chart in the analytics dashboard.
+    - **GDPR IP Anonymization** — Opt-in IPv4/IPv6 masking with SHA-256 hashing for unique visitor identification, managed via Settings.
+    - Google Safe Browsing checks now apply to all URLs submitted via the REST API (destination, A/B variants, and targeting rule URLs).
+    - Settings tab query parameters are now human-readable (e.g. `?tab=qr`).
+    - Added QR Scan Conversion Rate card with period-over-period delta to the analytics dashboard.
+    - The settings form is split into 8 independent single-responsibility tab classes for faster load times and cleaner tab navigation.
+  </Accordion>
+
+  <Accordion title="v3.3.0 — Advanced Multi-Filter Targeting Engine">
+    - Replaced the legacy single-strategy targeting panel with a flexible rule engine supporting `AND` / `OR` logic matching per rule.
+    - New filter categories: **Device** (desktop, mobile, tablet), **Platform** (Windows, macOS, Linux, iOS, Android, Fire OS), **Country** (multi-select with flags), and **Language** (multi-select browser language codes).
+    - Country flag icons are dynamically loaded from `flagcdn.com` in both the form and the analytics widgets.
+    - Fast-path `getDeviceType` and `getOs` helpers bypass full user-agent regex scanning during redirections for better performance.
+    - Legacy single-strategy database records are automatically upgraded to the new multi-filter format when loaded in the Filament form.
+  </Accordion>
+
+  <Accordion title="v3.2.0 — Expanded REST API and Alpine.js Webhook Preview">
+    - New REST API endpoints: `GET /api/short-url/links/{idOrKey}` (single link details), `GET /api/short-url/links/{idOrKey}/stats` (click metrics), and `PUT/PATCH /api/short-url/links/{idOrKey}` (full update).
+    - All API endpoints support lookup by either database `id` or `url_key`.
+    - Global REST API route throttling set to 60 requests per minute.
+    - Unified validation for API and admin panel forms, including `track_visits`, `ga_tracking_id`, and `auto_open_app_mobile`.
+    - Replaced the third-party CodeEditor Filament component with a custom Alpine.js dark-mode webhook payload preview with copy-to-clipboard.
+  </Accordion>
+
+  <Accordion title="v3.1.0 — Database-Backed Settings and HMAC Webhooks">
+    - Settings are now stored in the `short_url_settings` database table with automatic caching, replacing the legacy JSON file.
+    - Legacy `filament-short-url-settings.json` data is auto-imported on first load.
+    - Statistics aggregation command rewritten to use database-level `GROUP BY` queries, reducing memory usage to near zero.
+    - API keys are now stored as SHA-256 hashes, verified with `hash_equals()`, and shown only once on generation.
+    - **HMAC-signed webhooks** — Webhook payloads are now optionally signed via `X-ShortUrl-Signature` using a configurable secret.
+    - GA4 Client IDs are now deterministic (hashed IP + User Agent) instead of random UUIDs.
+    - Single-use, max-visit, and expiring links now force `302` redirects to prevent browser caching from bypassing visit tracking.
+  </Accordion>
+
+  <Accordion title="v3.0.0 — Native App Linking, Pixel Registry, and Custom Expiry Pages">
+    - **Native App Linking** — Automatically redirect mobile visitors into 24+ native apps (YouTube, TikTok, Instagram, Spotify, WhatsApp, etc.) using custom URL schemes, with a glassmorphic interstitial page.
+    - Live interactive app-matching preview widget inside the Filament edit form.
+    - **Global Deep Linking Files** — Serve iOS `apple-app-site-association` and Android `assetlinks.json` from your root domain (disabled by default, configured via Settings).
+    - **Central Retargeting Pixel Registry** — Define Meta Pixel, Google Tag, LinkedIn Insight, TikTok Pixel, and Pinterest Tag once, then attach them to any link via checkbox selection in the UI or the REST API.
+    - Settings moved from a resource sub-action to a standalone sidebar navigation page.
+    - Enhanced browser language targeting with double-pass matching (exact locale first, then base language code).
+    - **Custom Branded Expiry Pages** — Expired or inactive links now show a styled page with your site name instead of a bare `410 Gone` error.
+  </Accordion>
+
+  <Accordion title="v2.0.0 — QR Logo Upload and Browser Language Tracking">
+    - **QR Code Logo Upload** — Upload a custom brand logo inside the QR designer canvas, with configurable sizing, margins, and square/circle shape options.
+    - **QR Scan Tracking** — QR code scans are now differentiated from regular web clicks via `?source=qr`, tracked in a dedicated `is_qr_scan` column, and displayed as a distinct metric in analytics and the link list table.
+    - **Browser Language Detection** — Visitor preferred language is captured from `Accept-Language` headers and shown in a new **Top Languages** analytics widget.
+    - Atomic database transactions for buffered counter updates with fail-safe rollback restoring cache values on DB failure.
+    - `getShortUrl()` now correctly handles empty route prefixes, generating `domain.com/abc123` instead of `domain.com//abc123`.
+  </Accordion>
+
+  <Accordion title="v1.7.0 — Role-Based Settings Access Control">
+    - New `authorizeSettingsUsing(Closure)` plugin method restricts who can access the Settings page using any callable that returns a `bool`.
+    - Auto-detects a `manageSettings` method on a registered `ShortUrl` policy as an alternative to the plugin callback.
+    - The **Settings** button in the table header is automatically hidden when the current user lacks access.
+  </Accordion>
+
+  <Accordion title="v1.6.0 — Google Safe Browsing, VPN Filtering, and World Map">
+    - **Google Safe Browsing** — All destination URLs are automatically checked against Google's threat database when a link is created or edited. The Filament UI displays a status badge and blocks saving if the URL is flagged as malware, phishing, or social engineering.
+    - **VPN, Proxy, and Tor Filtering** — Detect and optionally block VPN, anonymous proxy, and Tor exit-node traffic to keep your analytics clean. Choose between flag-only mode (logs the visit but marks it) or hard-block mode (returns `403 Forbidden`). Supports IP-API and VPNAPI.io drivers.
+    - **Visitor World Map** — A new interactive SVG world map widget on the analytics dashboard visualizes click distribution by country, with per-country hover stats and intensity highlighting.
+  </Accordion>
+
+  <Accordion title="v1.5.0 — REST API, Webhooks, and Retargeting Pixels">
+    - **Developer REST API** — `GET`, `POST`, and `DELETE` endpoints for managing short URLs programmatically, with API key authentication managed via the Settings UI.
+    - **Webhook System** — Real-time HTTP POST notifications on `visited`, `created`, `expired`, and `limit_reached` events, dispatched asynchronously with 3-attempt retry and 10-second backoff.
+    - **Social Retargeting Pixels** — Attach Meta Pixel, Google Ads Tag, and LinkedIn Insight Tag to any link; a glassmorphic interstitial fires pixel scripts in the visitor's browser before the redirect.
+    - New **Settings → API & Webhooks** tab for managing global webhook URL, monitored events, and API key lifecycle.
+  </Accordion>
+
+  <Accordion title="v1.4.0 — Link Expiration, Visit Caps, and Fluent Builder Additions">
+    - **Validity Date Ranges** — Set `activated_at` and `expires_at` timestamps to control exactly when a link is active.
+    - **Visit Caps** — Define a `max_visits` limit; the link deactivates automatically once the cap is reached.
+    - **Custom Expiration Fallbacks** — Redirect expired or over-limit visitors to a custom `expiration_redirect_url` instead of a `410` error.
+    - Fluent builder gains `activatedAt()`, `deactivatedAt()`, `maxVisits()`, and `expirationRedirectUrl()` methods.
+  </Accordion>
+
+  <Accordion title="v1.3.0 — Automatic Scheduler Registration">
+    - Both Artisan commands (`short-url:sync-counters` and `short-url:aggregate-and-prune`) are now auto-registered by the service provider — no manual schedule entries required in your application.
+    - The scheduler dynamically respects your Settings GUI toggles; disabling a feature in Settings stops the corresponding job from running.
+    - Added real-time **Test connection** verify actions for the GA4 Measurement Protocol API and MaxMind database path in Settings.
+    - Improved click-to-copy reliability in table rows with a built-in fallback for non-HTTPS browser environments.
+  </Accordion>
+
+  <Accordion title="v1.2.0 — Password Protection, Targeting Rules, and Aggregation">
+    - **Password-Protected Links** — Session-based unlock flow with a styled prompt page; visitors only enter the password once per session.
+    - **Redirect Warning Pages** — Interstitial safety screen before redirecting to external domains, with Continue and Go Back buttons.
+    - **Smart Targeting** — Device-based, country/geo-based, and A/B weighted rotation rules per link.
+    - **Rate Limiting** — Configurable per-IP redirect throttling returning `429 Too Many Requests` responses.
+    - **Daily Stats Aggregation** — Nightly `short-url:aggregate-and-prune` command for scalable log management and configurable raw log pruning.
+    - New **Performance & Security** settings tab for aggregation, pruning, and rate limiting configuration.
+    - Full Polish (`pl`) locale translation support.
+  </Accordion>
+
+</AccordionGroup>

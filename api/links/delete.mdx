@@ -1,0 +1,76 @@
+---
+title: "DELETE /api/short-url/links/{idOrKey} — Remove a Short Link"
+sidebarTitle: "Delete Link"
+description: "Permanently delete a short link by numeric ID or URL key. The operation cannot be undone — use the admin panel archive feature to preserve the record instead."
+---
+
+Use this endpoint to permanently remove a short link from your database. Once deleted, the link's slug is freed and may be reused for a new link. All associated visit history and analytics data for the deleted link are also removed. If you want to stop a link from working without losing its data, consider disabling it via `PATCH` with `"is_enabled": false`, or archiving it through the Filament admin panel instead.
+
+## Endpoint
+
+```
+DELETE /api/short-url/links/{idOrKey}
+```
+
+**Required scope:** `links:read-write`  
+**Success response:** `200 OK`
+
+## Path Parameters
+
+<ParamField path="idOrKey" type="string | integer" required>
+  The short link's numeric database ID (e.g. `43`) or its URL key slug (e.g. `summer26`).
+</ParamField>
+
+<Warning>
+  Deletion is **permanent and irreversible**. All visit logs, analytics, and targeting rules associated with the link are deleted along with the record. If you need to preserve the link's data or redirect history, use the **Archive** action in the Filament admin panel instead — archived links are hidden from the default list but remain fully restorable at any time.
+</Warning>
+
+## Example Request
+
+<CodeGroup>
+```bash Delete by URL key
+curl -X DELETE https://yourdomain.com/api/short-url/links/summer26 \
+  -H "Authorization: Bearer YOUR_API_KEY" \
+  -H "Accept: application/json"
+```
+
+```bash Delete by numeric ID
+curl -X DELETE https://yourdomain.com/api/short-url/links/43 \
+  -H "Authorization: Bearer YOUR_API_KEY" \
+  -H "Accept: application/json"
+```
+</CodeGroup>
+
+## Example Response
+
+<CodeGroup>
+```json 200 OK
+{
+  "message": "Short URL deleted successfully."
+}
+```
+
+```json 404 Not Found
+{
+  "message": "Short URL not found."
+}
+```
+</CodeGroup>
+
+## Response Fields
+
+<ResponseField name="message" type="string">
+  A confirmation string: `"Short URL deleted successfully."` on success.
+</ResponseField>
+
+## Error Responses
+
+| HTTP Code | Cause |
+|-----------|-------|
+| `401 Unauthorized` | Missing or invalid API key |
+| `403 Forbidden` | Key uses `links:read-only` scope |
+| `404 Not Found` | No link found matching the provided ID or URL key |
+
+<Info>
+  After a successful deletion, any visitor who follows the old short URL will receive the default 410 Gone response (or your application's fallback route behaviour), since the link record no longer exists in the database.
+</Info>

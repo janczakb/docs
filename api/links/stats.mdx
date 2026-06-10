@@ -1,0 +1,231 @@
+---
+title: "GET /api/short-url/links/{idOrKey}/stats — Analytics Data"
+sidebarTitle: "Link Stats"
+description: "Retrieve aggregated click analytics for a short link with optional date range filtering. Returns visits, unique visitors, QR scans, and breakdowns by country, device, browser, and more."
+---
+
+The stats endpoint returns aggregated analytics for a single short link. You can optionally filter results to a specific date range using the `date_from` and `date_to` query parameters. Historical dates are served from pre-aggregated daily summaries and merged transparently with today's live visit counts — exactly the same data you see on the Filament analytics dashboard.
+
+## Endpoint
+
+```
+GET /api/short-url/links/{idOrKey}/stats
+```
+
+**Required scope:** `links:read-only` or `links:read-write`
+
+## Path Parameters
+
+<ParamField path="idOrKey" type="string | integer" required>
+  The short link's numeric database ID or URL key slug.
+</ParamField>
+
+## Query Parameters
+
+<ParamField query="date_from" type="string">
+  Start of the date range in `YYYY-MM-DD` format. When omitted, the stats cover all available history.
+</ParamField>
+
+<ParamField query="date_to" type="string">
+  End of the date range in `YYYY-MM-DD` format. Must be greater than or equal to `date_from`. When omitted, defaults to the current date.
+</ParamField>
+
+<Note>
+  Stats are cached with a default TTL of 5 minutes (`SHORT_URL_STATS_CACHE_TTL=300`). You may see a short delay before a very recent click appears in the API response. The same cache powers the Filament analytics dashboard, so both always show consistent data.
+</Note>
+
+## Example Requests
+
+<CodeGroup>
+```bash All-time stats
+curl https://yourdomain.com/api/short-url/links/summer26/stats \
+  -H "Authorization: Bearer YOUR_API_KEY" \
+  -H "Accept: application/json"
+```
+
+```bash Filtered by date range
+curl "https://yourdomain.com/api/short-url/links/summer26/stats?date_from=2026-06-01&date_to=2026-06-30" \
+  -H "Authorization: Bearer YOUR_API_KEY" \
+  -H "Accept: application/json"
+```
+
+```bash By numeric ID with date range
+curl "https://yourdomain.com/api/short-url/links/43/stats?date_from=2026-06-01" \
+  -H "Authorization: Bearer YOUR_API_KEY" \
+  -H "Accept: application/json"
+```
+</CodeGroup>
+
+## Example Response
+
+<CodeGroup>
+```json 200 OK
+{
+  "data": {
+    "totalVisits": 156,
+    "uniqueVisits": 98,
+    "visitsToday": 14,
+    "visitsThisWeek": 114,
+    "visitsThisMonth": 156,
+    "visitsByDay": {
+      "2026-06-01": 42,
+      "2026-06-02": 50,
+      "2026-06-03": 28,
+      "2026-06-04": 36
+    },
+    "visitsByCountry": {
+      "Poland": 100,
+      "United States": 50,
+      "Germany": 6
+    },
+    "visitsByCity": {
+      "Warsaw (PL)": 80,
+      "Krakow (PL)": 20,
+      "New York (US)": 30
+    },
+    "visitsByDevice": {
+      "desktop": 90,
+      "mobile": 56,
+      "tablet": 10
+    },
+    "visitsByBrowser": {
+      "Chrome": 110,
+      "Safari": 35,
+      "Firefox": 11
+    },
+    "visitsByOs": {
+      "Windows": 70,
+      "macOS": 50,
+      "iOS": 20,
+      "Android": 16
+    },
+    "visitsByReferer": {
+      "linkedin.com": 80,
+      "twitter.com": 40,
+      "direct": 36
+    },
+    "utmSources": {
+      "linkedin": 80,
+      "twitter": 40
+    },
+    "utmMediums": {
+      "social": 120
+    },
+    "utmCampaigns": {
+      "summer26": 120
+    },
+    "qrScans": 12,
+    "visitsByLanguage": {
+      "pl": 100,
+      "en": 56
+    }
+  }
+}
+```
+
+```json 404 Not Found
+{
+  "message": "Short URL not found."
+}
+```
+
+```json 422 Invalid Date Range
+{
+  "message": "The date to field must be a date after or equal to date from.",
+  "errors": {
+    "date_to": [
+      "The date to field must be a date after or equal to date from."
+    ]
+  }
+}
+```
+</CodeGroup>
+
+## Response Fields
+
+<ResponseField name="data" type="object">
+  Aggregated analytics for the requested link and date range.
+
+  <Expandable title="data fields">
+    <ResponseField name="totalVisits" type="integer">
+      Total number of visits (including repeat visitors) within the requested period.
+    </ResponseField>
+
+    <ResponseField name="uniqueVisits" type="integer">
+      Number of unique visitors identified by hashed IP address within the requested period.
+    </ResponseField>
+
+    <ResponseField name="visitsToday" type="integer">
+      Visits recorded on the current calendar day (always live — not from the daily aggregation cache).
+    </ResponseField>
+
+    <ResponseField name="visitsThisWeek" type="integer">
+      Visits during the current calendar week (Monday–Sunday).
+    </ResponseField>
+
+    <ResponseField name="visitsThisMonth" type="integer">
+      Visits during the current calendar month.
+    </ResponseField>
+
+    <ResponseField name="visitsByDay" type="object">
+      Visit counts keyed by date string in `YYYY-MM-DD` format. Only dates with at least one visit appear as keys.
+    </ResponseField>
+
+    <ResponseField name="visitsByCountry" type="object">
+      Visit counts keyed by full country name (e.g. `"Poland"`, `"United States"`). Only returned when country tracking is enabled and a Geo-IP driver is configured.
+    </ResponseField>
+
+    <ResponseField name="visitsByCity" type="object">
+      Visit counts keyed by `"City (CC)"` string (e.g. `"Warsaw (PL)"`). Only returned when city-level Geo-IP resolution is available.
+    </ResponseField>
+
+    <ResponseField name="visitsByDevice" type="object">
+      Visit counts keyed by device type: `desktop`, `mobile`, or `tablet`. Only returned when `track_device_type` is enabled for this link.
+    </ResponseField>
+
+    <ResponseField name="visitsByBrowser" type="object">
+      Visit counts keyed by browser name (e.g. `"Chrome"`, `"Safari"`). Only returned when `track_browser` is enabled.
+    </ResponseField>
+
+    <ResponseField name="visitsByOs" type="object">
+      Visit counts keyed by operating system name (e.g. `"Windows"`, `"macOS"`). Only returned when `track_operating_system` is enabled.
+    </ResponseField>
+
+    <ResponseField name="visitsByReferer" type="object">
+      Visit counts keyed by referrer hostname (e.g. `"linkedin.com"`). `"direct"` represents visits with no referrer header. Only returned when `track_referer_url` is enabled.
+    </ResponseField>
+
+    <ResponseField name="utmSources" type="object">
+      Visit counts keyed by `utm_source` parameter value.
+    </ResponseField>
+
+    <ResponseField name="utmMediums" type="object">
+      Visit counts keyed by `utm_medium` parameter value.
+    </ResponseField>
+
+    <ResponseField name="utmCampaigns" type="object">
+      Visit counts keyed by `utm_campaign` parameter value.
+    </ResponseField>
+
+    <ResponseField name="qrScans" type="integer">
+      Number of visits originating from QR code scans (detected via `?source=qr` on the incoming request).
+    </ResponseField>
+
+    <ResponseField name="visitsByLanguage" type="object">
+      Visit counts keyed by ISO-639-1 language code (e.g. `"pl"`, `"en"`). Only returned when `track_browser_language` is enabled.
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+<Info>
+  Breakdown keys (`visitsByCountry`, `visitsByDevice`, `visitsByBrowser`, etc.) are only present in the response when the corresponding tracking flag is enabled on the link. If a dimension has no data for the requested period, its key is omitted or returns an empty object.
+</Info>
+
+## How Aggregation Works
+
+The stats endpoint merges two data sources transparently:
+
+- **Historical data** comes from pre-aggregated daily summaries, which are built nightly by the `short-url:aggregate-and-prune` command. This keeps queries fast even at millions of visits.
+- **Today's data** is sourced directly from raw visit records so you always see up-to-the-minute counts for the current day.
+
+The result is cached for the duration configured by `SHORT_URL_STATS_CACHE_TTL` (default: 300 seconds / 5 minutes).

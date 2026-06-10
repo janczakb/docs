@@ -1,0 +1,84 @@
+---
+title: "Artisan Commands Reference for Filament Short URL"
+sidebarTitle: "Artisan Commands"
+description: "Reference for the two built-in Artisan commands that sync buffered visit counters and aggregate or prune raw visit logs on a schedule."
+---
+
+The plugin ships two Artisan commands that keep your database lean and your visit counters accurate at any traffic level. Both commands are auto-registered by the service provider as of v1.3.0 — you only need the standard Laravel cron entry running on your server.
+
+---
+
+## `short-url:sync-counters`
+
+Flushes buffered visit count increments from the application cache into the database. When counter buffering is active, every visitor click increments a lightweight cache key instead of hitting the database directly — this command periodically drains those increments into the database, keeping your visit totals accurate without write-lock bottlenecks under high traffic.
+
+```bash
+php artisan short-url:sync-counters
+```
+
+<CardGroup cols={2}>
+  <Card title="When to use" icon="clock">
+    Only relevant when **Buffer Visit Counts in Cache** is enabled in **Settings → Performance**. Without buffering, all counts are written directly to the database on each click.
+  </Card>
+  <Card title="Auto-schedule" icon="calendar">
+    Automatically scheduled **every minute** by the service provider when counter buffering is ON in Settings. No manual schedule entry required.
+  </Card>
+</CardGroup>
+
+---
+
+## `short-url:aggregate-and-prune`
+
+Summarises raw visit records from previous calendar days into daily stat summaries and permanently deletes raw rows older than the configured retention window. This keeps your analytics queries fast and your database footprint predictable, even at millions of visits per month.
+
+```bash
+php artisan short-url:aggregate-and-prune
+```
+
+<CardGroup cols={2}>
+  <Card title="When to use" icon="clock">
+    Enable **Daily Aggregation** in **Settings → Performance**. At high traffic volumes, raw visit logs can grow to gigabytes — aggregation keeps dashboard queries fast while preserving all statistical data.
+  </Card>
+  <Card title="Auto-schedule" icon="calendar">
+    Automatically scheduled **daily at 02:00** by the service provider when aggregation is ON in Settings. No manual schedule entry required.
+  </Card>
+</CardGroup>
+
+### Retention configuration
+
+| Setting | Default | Description |
+|---|---|---|
+| Enable pruning | `true` | Toggle raw log deletion after aggregation |
+| Retention window | 90 days | Days to retain raw visit records before pruning |
+
+Configure both options in **Settings → Performance**, or via the `SHORT_URL_PRUNING_ENABLED` and `SHORT_URL_PRUNING_DAYS` environment variables. Set the retention window to `0` to disable pruning while keeping aggregation active.
+
+---
+
+## Automatic Scheduler Registration
+
+As of **v1.3.0**, both commands are registered in the Laravel Scheduler automatically by the plugin's service provider. The schedule respects the corresponding Settings toggles — if you disable aggregation in Settings, the daily job stops running without any code changes.
+
+To activate the scheduler, add this single cron entry to your server:
+
+```bash
+* * * * * cd /path-to-your-project && php artisan schedule:run >> /dev/null 2>&1
+```
+
+<Note>
+  Both commands execute **synchronously** within the scheduling process. You do **not** need a running queue worker (`php artisan queue:work`) for these commands — the cron entry alone is sufficient.
+</Note>
+
+### Manual schedule configuration
+
+If you prefer to manage the schedule yourself (for example, to run aggregation at a different time), disable the corresponding toggle in Settings to avoid duplicate executions, then add the commands to `routes/console.php`:
+
+```php
+use Illuminate\Support\Facades\Schedule;
+
+// Flush buffered click counts every minute
+Schedule::command('short-url:sync-counters')->everyMinute();
+
+// Aggregate stats and prune old raw visits nightly
+Schedule::command('short-url:aggregate-and-prune')->dailyAt('02:00');
+```

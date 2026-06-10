@@ -1,0 +1,116 @@
+---
+title: "Server and Software Requirements for Filament Short URL"
+sidebarTitle: "Requirements"
+description: "Review the PHP, Laravel, Filament, database, and queue driver requirements before you install Filament Short URL into your application."
+---
+
+Before you install Filament Short URL, confirm that your environment meets the requirements below. The plugin is designed to work with the current LTS-era Laravel ecosystem and avoids any database-specific syntax, so it runs equally well on MySQL, PostgreSQL, and SQLite.
+
+## Core Requirements
+
+<CardGroup cols={2}>
+  <Card title="PHP 8.3+" icon="php">
+    The plugin uses PHP 8.3 features including readonly properties and typed class constants. Earlier PHP versions are not supported.
+  </Card>
+  <Card title="Laravel 11+" icon="laravel">
+    Built against the Laravel 11 application skeleton and service-provider boot lifecycle. Laravel 10 and earlier are not compatible.
+  </Card>
+  <Card title="Filament 5+" icon="sparkles">
+    Requires a configured Filament v5 panel. The plugin registers its resources, pages, and navigation items through the standard Filament plugin API.
+  </Card>
+  <Card title="Any Supported Database" icon="database">
+    All migrations are compatible with **MySQL**, **PostgreSQL**, and **SQLite**. No MySQL-specific `ENUM` columns or ordering hints are used.
+  </Card>
+</CardGroup>
+
+## Queue Driver
+
+The plugin dispatches visit tracking, webhook delivery, and GA4 Measurement Protocol events as queued jobs. Any Laravel-supported queue driver works:
+
+| Driver | Suitable for | Notes |
+|---|---|---|
+| `sync` | Local development | Jobs run inline on the redirect request thread. No worker process needed. |
+| `database` | Small to medium production | Requires the `jobs` table (`php artisan queue:table && php artisan migrate`). |
+| `redis` | High-traffic production | Recommended. Keeps redirect response times under 20 ms. |
+| Any other driver | Production | Beanstalkd, SQS, and other Laravel-supported drivers all work. |
+
+<Tip>
+  Use `SHORT_URL_QUEUE=sync` in your local `.env` file so you can test the full visit-tracking flow without running a queue worker. Switch to `SHORT_URL_QUEUE=redis` (or `database`) in production to keep redirects fast and prevent tracking jobs from blocking the HTTP response.
+</Tip>
+
+## Optional Integrations
+
+These dependencies are not required for the plugin to function. Enable them only for the specific features you need.
+
+<AccordionGroup>
+
+<Accordion title="MaxMind GeoLite2-Country — Offline Geo-IP">
+  The plugin resolves visitor countries using three interchangeable drivers. If you want fully offline, GDPR-friendly country detection without external API calls, download the free **GeoLite2-Country** database from [MaxMind](https://dev.maxmind.com/geoip/geolite2-free-geolocation-data) and place the `.mmdb` file on your server.
+
+  Configure the path in your `.env`:
+
+  ```dotenv
+  SHORT_URL_GEO_IP_DRIVER=maxmind
+  SHORT_URL_MAXMIND_DB=/absolute/path/to/GeoLite2-Country.mmdb
+  ```
+
+  The default storage path the plugin looks for is `storage/geoip/GeoLite2-Country.mmdb`.
+
+  If you don't use MaxMind, the plugin can fall back to reading CDN headers (Cloudflare `CF-IPCountry`, CloudFront `CloudFront-Viewer-Country`) or making online requests to `ip-api.com`.
+</Accordion>
+
+<Accordion title="Google Safe Browsing API Key — URL Safety Checks">
+  When a Google Safe Browsing API key is configured, the plugin checks every destination URL against Google's threat database whenever a link is created or edited. Links pointing to malware, phishing, or social engineering domains are blocked before they can be saved.
+
+  Obtain a key from the [Google Cloud Console](https://console.cloud.google.com/) by enabling the **Safe Browsing API**, then add it in **Settings → Security** inside your Filament panel. No `.env` variable is required — it is stored in the database via the Settings GUI.
+</Accordion>
+
+<Accordion title="GA4 Measurement Protocol API Secret — Server-Side Analytics">
+  Server-side GA4 integration lets you send `short_url_visit` events directly from your server to Google Analytics 4, completely bypassing browser-side ad-blockers. You need:
+
+  - A **GA4 API Secret** — generate one in GA4 under **Admin → Data Streams → Measurement Protocol API secrets**.
+  - A **GA4 Measurement ID** or **Firebase App ID** for the target stream.
+
+  Configure these in your `.env`:
+
+  ```dotenv
+  GA4_API_SECRET=your_api_secret_here
+  FIREBASE_APP_ID=1:123456789:web:abcdefg
+  ```
+
+  Or enter them directly in **Settings → Tracking → Google Analytics 4** inside the Filament panel.
+</Accordion>
+
+<Accordion title="dig CLI Tool — Custom Domain DNS Verification">
+  The custom domain branding feature verifies CNAME and A records using PHP's built-in `dns_get_record()` function. If that function is disabled on your server, the plugin automatically falls back to the `dig` command-line tool.
+
+  Install it on Debian/Ubuntu with:
+
+  ```bash
+  apt install dnsutils
+  ```
+
+  Or on CentOS/RHEL:
+
+  ```bash
+  yum install bind-utils
+  ```
+
+  If neither `dns_get_record()` nor `dig` is available, the plugin falls back to matching against `$_SERVER['SERVER_ADDR']` for A records.
+</Accordion>
+
+</AccordionGroup>
+
+## Summary Table
+
+| Requirement | Version / Value | Required? |
+|---|---|:---:|
+| PHP | 8.3+ | ✅ |
+| Laravel | 11+ | ✅ |
+| Filament | 5+ | ✅ |
+| MySQL / PostgreSQL / SQLite | Any modern version | ✅ |
+| Queue driver | Any Laravel-supported driver | ✅ |
+| MaxMind GeoLite2-Country `.mmdb` | Any current release | ❌ Optional |
+| Google Safe Browsing API key | Any valid key | ❌ Optional |
+| GA4 Measurement Protocol API Secret | Any valid secret | ❌ Optional |
+| `dig` CLI tool | Any version | ❌ Optional |

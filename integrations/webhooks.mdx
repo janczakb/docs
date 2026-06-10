@@ -1,0 +1,138 @@
+---
+title: "HMAC-Signed Webhooks for Short URL Events"
+sidebarTitle: "Webhooks"
+description: "Send real-time HTTP POST notifications to any endpoint when short URLs are visited, created, expired, or hit their click limit — signed with HMAC-SHA256."
+---
+
+Webhooks let external systems react to link activity the moment it happens. Every time a monitored event occurs on one of your short URLs, the plugin dispatches an HTTP POST request to your chosen endpoint — asynchronously via the Laravel queue, so visitor redirects are never delayed.
+
+## Webhook Modes
+
+You can configure webhooks at two levels. The two modes coexist; per-link URLs always take priority.
+
+<CardGroup cols={2}>
+  <Card title="Per-Link Webhook URL" icon="link">
+    Set a `Dedicated Webhook URL` on a specific short URL (in the **Marketing & API** tab, or via the `webhook_url` REST API field). This URL fires for every event on that link, regardless of global settings or monitored event filters.
+  </Card>
+  <Card title="Global Webhook URL" icon="globe">
+    Configure a single URL under **Settings → API & Webhooks → Global Webhook Configuration**. It fires for all links that do **not** have their own dedicated URL, but only for the event types you select in **Monitored Webhook Events**.
+  </Card>
+</CardGroup>
+
+### Priority Resolution
+
+<Steps>
+  <Step title="Per-link URL check">
+    If the short URL has a `webhook_url` set, use it — always fires regardless of global event filters.
+  </Step>
+  <Step title="Global URL check">
+    If no per-link URL is configured and a Global Webhook URL exists, fire it — but only if the event type is in your selected **Monitored Webhook Events** list.
+  </Step>
+  <Step title="No webhook">
+    If neither condition is met, no webhook is dispatched for this event.
+  </Step>
+</Steps>
+
+---
+
+## Monitored Events
+
+| Event key | When fired |
+|---|---|
+| `visited` | A visitor clicks the short URL |
+| `created` | A new short URL is created via the REST API |
+| `expired` | A link reaches its expiration date |
+| `limit_reached` | A link reaches its `max_visits` click limit |
+
+<Note>
+  Per-link webhooks always fire for `visited` and `created` events regardless of which events are selected in the global **Monitored Webhook Events** setting.
+</Note>
+
+---
+
+## Payload Format
+
+All webhook requests use `Content-Type: application/json`. The `visit` object is populated for `visited` events; it contains `null` values for the other event types.
+
+```json
+{
+  "event": "visited",
+  "timestamp": "2026-06-02T10:00:00+00:00",
+  "short_url": {
+    "id": 1,
+    "destination_url": "https://example.com",
+    "url_key": "abc123",
+    "short_url": "https://yourdomain.com/s/abc123",
+    "total_visits": 48,
+    "unique_visits": 32
+  },
+  "visit": {
+    "id": 101,
+    "visited_at": "2026-06-02T10:00:00+00:00",
+    "device_type": "desktop",
+    "browser": "Chrome",
+    "browser_version": "124.0",
+    "operating_system": "Windows",
+    "operating_system_version": "10",
+    "country": "Poland",
+    "country_code": "PL",
+    "city": "Warsaw",
+    "referer_url": "https://linkedin.com",
+    "referer_host": "linkedin.com",
+    "utm_source": "linkedin",
+    "utm_medium": "social",
+    "utm_campaign": "spring_sale",
+    "utm_term": null,
+    "utm_content": null
+  }
+}
+```
+
+---
+
+## Signature Verification
+
+Webhook payloads can be cryptographically signed so your endpoint can confirm the request genuinely came from your server.
+
+<Steps>
+  <Step title="Set a signing secret">
+    Go to **Settings → API & Webhooks** and enter a **Webhook Signing Secret**. Keep this value private — treat it like a password.
+  </Step>
+  <Step title="Inspect the signature header">
+    Every outgoing POST includes an `X-ShortUrl-Signature` header. Its value is computed as:
+
+    ```
+    hash_hmac('sha256', $payloadJson, $secret)
+    ```
+  </Step>
+  <Step title="Verify in your endpoint">
+    Re-compute the HMAC from the raw request body using your shared secret, then compare with `hash_equals()` to prevent timing attacks:
+
+    ```php
+    $signature = $request->header('X-ShortUrl-Signature');
+    $expected  = hash_hmac('sha256', $request->getContent(), $secret);
+
+    if (! hash_equals($expected, $signature)) {
+        abort(403, 'Invalid signature');
+    }
+    ```
+  </Step>
+</Steps>
+
+<Warning>
+  Always use `hash_equals()` for the comparison — a regular `===` check is vulnerable to timing-based attacks that can leak information about the secret.
+</Warning>
+
+---
+
+## Retry Policy
+
+If your endpoint returns a non-2xx response or is unreachable, the webhook delivery retries automatically with exponential backoff:
+
+- **Attempts:** 3 total (1 initial + 2 retries)
+- **Backoff:** Exponential, starting at 10 seconds between each attempt
+- **Failure handling:** After all retries are exhausted, the job lands in your Laravel failed jobs table. You can inspect and re-run it with `php artisan queue:retry`.
+
+<Note>
+  Webhook jobs run asynchronously. A slow or offline endpoint never blocks the visitor's redirect — the redirect completes in under 20 ms regardless of webhook status.
+</Note>

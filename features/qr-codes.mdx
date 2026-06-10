@@ -1,0 +1,101 @@
+---
+title: "Design and Track Branded QR Codes in Filament Short URL"
+sidebarTitle: "QR Codes"
+description: "Customize QR code dot styles, gradients, logos, and colors in the SVG designer, then export as SVG or PNG and track every scan separately from web clicks."
+---
+
+Every short link you create automatically gets a QR code. You can scan it immediately, download it for print, or open the full SVG QR Code Designer to match it precisely to your brand — adjusting colors, gradients, dot styles, and logo overlays with no external tools required.
+
+## The SVG QR Code Designer
+
+Open the designer from any link by pressing `Q` on the row or selecting **QR Code** from the action dropdown. The designer renders a live SVG preview that updates as you change each setting.
+
+### Dot Style
+
+The **Dot Style** option controls the shape of each individual module in the QR code matrix. Six styles are available:
+
+| Style | Description |
+|---|---|
+| `square` | Classic sharp-cornered modules — the default. Highest contrast and universally compatible. |
+| `dots` | Circular dots instead of squares — a modern, airy look. |
+| `rounded` | Square modules with softly rounded corners — a clean middle ground. |
+| `classy` | Stylised modules with a premium editorial feel. |
+| `classy-rounded` | Classy style with additional corner rounding for an extra-polished appearance. |
+| `extra-rounded` | Fully rounded modules for a smooth, bubble-like aesthetic. |
+
+All styles remain fully scannable by modern QR readers when contrast and quiet zone guidelines are respected.
+
+### Colors and Gradient
+
+<CardGroup cols={2}>
+  <Card title="Foreground color" icon="paintbrush">
+    Set the color of the QR dots. Defaults to `#000000` (black). Any CSS hex color is accepted.
+  </Card>
+  <Card title="Background color" icon="fill">
+    Set the canvas background color. Defaults to `#ffffff` (white). Use a transparent or branded background for compositing over print materials.
+  </Card>
+  <Card title="Gradient" icon="swatchbook">
+    Enable the gradient toggle to replace the flat foreground color with a smooth color transition. Choose a **From** color and a **To** color, then select either **Linear** or **Radial** as the gradient type.
+  </Card>
+  <Card title="Margin" icon="square-dashed">
+    Control the quiet zone around the QR code. A margin of `1` (the default) provides the minimum recommended quiet zone for reliable scanning.
+  </Card>
+</CardGroup>
+
+### Logo Overlay
+
+Upload a custom brand logo to embed it at the center of the QR code. The designer gives you full control over how the logo is presented:
+
+<Accordion title="Logo overlay options">
+  | Option | Description |
+  |---|---|
+  | **Logo image** | Upload any PNG or SVG to use as the center logo. |
+  | **Logo size** | Control how much of the QR code canvas the logo occupies. |
+  | **Logo margin** | Set the padding between the logo edge and the surrounding QR dots. |
+  | **Logo shape** | Choose **Square** for a rectangular logo cutout or **Circle** for a circular mask — both work well with modern brand marks. |
+  | **Remove dot backing** | Strip the dots directly beneath the logo so the image sits cleanly on the background without overlapping modules. |
+</Accordion>
+
+<Tip>
+  Configure your global QR defaults once in **Settings → QR Design** so every new link automatically inherits your brand colors, gradient, and logo. You can still override these values per-link in the designer — the global defaults just eliminate repetitive setup for new links.
+</Tip>
+
+## Export Options
+
+Once you are happy with the design, export it in either format:
+
+<CardGroup cols={2}>
+  <Card title="SVG Download" icon="vector-square">
+    Download a fully scalable SVG file. Use this for web, digital advertising, or any context where resolution independence matters.
+  </Card>
+  <Card title="PNG Download" icon="image">
+    Download a high-resolution raster PNG. The output size is based on the configured **Size** value (default `300` px, can be increased for print-ready quality).
+  </Card>
+</CardGroup>
+
+## QR Scan Tracking
+
+QR scans are tracked **separately** from regular web clicks. When a visitor scans a QR code, the system automatically identifies the visit as a QR scan and records it as a distinct event — separate from ordinary browser clicks.
+
+Your analytics dashboard shows a **dedicated QR scan conversion metric** alongside total and unique web visits. The links table also displays a distinct scan counter badge on each row so you can see QR performance at a glance without opening the full analytics view.
+
+## Default QR Code Configuration
+
+You can set global defaults for all new QR codes in **Settings → QR Design** — no code changes or file edits required. The defaults shipped with the package are:
+
+```php
+// config/filament-short-url.php
+'qr_defaults' => [
+    'size'             => 300,
+    'margin'           => 1,
+    'dot_style'        => 'square',
+    'foreground_color' => '#000000',
+    'background_color' => '#ffffff',
+    'gradient_enabled' => false,
+    'gradient_from'    => '#4f46e5',
+    'gradient_to'      => '#06b6d4',
+    'gradient_type'    => 'linear',
+],
+```
+
+Any value you change in the **Settings** panel is stored in the database and cached immediately — it overrides the config file defaults without requiring a deployment or a cache flush.

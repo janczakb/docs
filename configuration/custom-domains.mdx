@@ -1,0 +1,138 @@
+---
+title: "Serve Short Links from Your Own Branded Domain"
+sidebarTitle: "Custom Domains"
+description: "Register and verify your own branded domains to serve short links directly from the domain root — no /s/ prefix, full DNS verification, and multi-domain support."
+---
+
+Branded short links — like `go.yourcompany.com/abc123` instead of `yourapp.com/s/abc123` — build trust and improve click-through rates. Filament Short URL includes a full-featured custom domain manager that handles DNS verification, root-level routing, and multi-domain assignment from the admin panel. You can register as many domains as you need, and each short link can be assigned to any verified domain.
+
+<Warning>
+A custom domain must have its DNS records configured **and** verified before any links assigned to it will redirect correctly. Until verification passes, the domain is inactive.
+</Warning>
+
+## How It Works
+
+When a visitor hits a custom domain link (e.g. `go.yourcompany.com/abc123`), Laravel receives the request with a `Host` header matching your custom domain. The fallback route matches the path directly at the domain root — the default `/s/` prefix is **not** used for custom domain links.
+
+<Note>
+The Filament admin panel includes a real-time DNS verification UI. Click **Setup DNS / Verify** next to any domain to check whether your DNS records are resolving correctly right now. Verification uses PHP's `dns_get_record()` with a `dig` CLI fallback.
+</Note>
+
+## Adding a Custom Domain
+
+<Steps>
+  <Step title="Create the domain in Filament">
+    Open the **Custom Domains** resource in your Filament sidebar (under **Links → Custom Domains**). Click **Create** and enter your domain name — for example, `go.yourcompany.com`.
+  </Step>
+  <Step title="Configure DNS at your registrar">
+    Add **one** of the following records at your DNS provider (GoDaddy, Cloudflare, Namecheap, etc.):
+
+    | Type | Name | Value |
+    |---|---|---|
+    | `CNAME` | `go` (your subdomain) | `yourapp.com.` (your main app host) |
+    | `A` | `go` (your subdomain) | `123.45.67.89` (your server's IP) |
+
+    The plugin resolves your server's IP dynamically at verification time — no hardcoded values are needed in any config file.
+  </Step>
+  <Step title="Verify the domain">
+    Back in the **Custom Domains** table, click **Setup DNS / Verify** in the row actions. The plugin performs a live DNS lookup and, if the records resolve correctly, marks the domain as **Active**.
+  </Step>
+  <Step title="Assign links to the domain">
+    Open any short URL for editing. In the **Custom Domain** dropdown, select your verified domain. The generated short URL will immediately reflect the branded domain (e.g. `go.yourcompany.com/abc123`).
+
+    You can also assign or change a domain via the REST API by passing `"custom_domain_id"` in the request body when creating or updating a link.
+  </Step>
+</Steps>
+
+## Web Server Configuration
+
+Your web server must forward requests from the custom domain to your Laravel application. Here are example configurations for the most common servers:
+
+<AccordionGroup>
+  <Accordion title="nginx — Proxy to existing app">
+    ```nginx
+    server {
+        listen 80;
+        listen 443 ssl;
+        server_name go.yourcompany.com;
+
+        location / {
+            proxy_pass http://127.0.0.1:80;
+            proxy_set_header Host $host;
+            proxy_set_header X-Real-IP $remote_addr;
+            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+            proxy_set_header X-Forwarded-Proto $scheme;
+        }
+    }
+    ```
+  </Accordion>
+  <Accordion title="nginx — Direct to Laravel public root">
+    ```nginx
+    server {
+        listen 80;
+        listen 443 ssl;
+        server_name go.yourcompany.com;
+
+        root /var/www/your-app/public;
+        index index.php;
+
+        location / {
+            try_files $uri $uri/ /index.php?$query_string;
+        }
+
+        location ~ \.php$ {
+            include snippets/fastcgi-php.conf;
+            fastcgi_pass unix:/run/php/php8.3-fpm.sock;
+        }
+    }
+    ```
+  </Accordion>
+  <Accordion title="Caddy">
+    ```caddyfile
+    go.yourcompany.com {
+        root * /var/www/your-app/public
+        php_fastcgi unix//run/php/php8.3-fpm.sock
+        file_server
+    }
+    ```
+  </Accordion>
+  <Accordion title="Apache">
+    ```apache
+    <VirtualHost *:80>
+        ServerName go.yourcompany.com
+        DocumentRoot /var/www/your-app/public
+
+        <Directory /var/www/your-app/public>
+            AllowOverride All
+            Require all granted
+        </Directory>
+    </VirtualHost>
+    ```
+  </Accordion>
+</AccordionGroup>
+
+No additional Laravel application configuration is needed beyond registering the domain in the Filament UI. Laravel automatically detects the incoming `Host` header and routes requests via the fallback route.
+
+## Disabling the Default Domain
+
+If you want **all** links to use custom domains and prevent the default `yourapp.com/s/{key}` format entirely, set this in your `.env`:
+
+```bash
+SHORT_URL_DISABLE_DEFAULT_DOMAIN=true
+```
+
+When this is enabled, the default domain option is hidden from the short URL creation form and links must always be assigned to a verified custom domain.
+
+## Fallback Route
+
+The fallback route is what makes root-level custom domain routing work. It is enabled by default:
+
+```bash
+SHORT_URL_ENABLE_FALLBACK=true
+```
+
+This registers a catch-all route that intercepts any request whose path doesn't match a named Laravel route and checks whether it resolves to a short URL key on the matching domain. Set this to `false` only if you need to define your own custom domain routing logic manually.
+
+## Multiple Custom Domains
+
+You can register as many custom domains as you need — there is no limit. Each domain goes through the same DNS verification process independently, and individual short links each have their own `custom_domain_id` assignment. This means you can run multiple branded domains from a single Filament installation (e.g. one per client or campaign).

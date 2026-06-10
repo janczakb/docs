@@ -1,0 +1,98 @@
+{
+  "$schema": "https://mintlify.com/docs.json",
+  "name": "Filament Short URL",
+  "theme": "luma",
+  "colors": {
+    "primary": "#f8c039",
+    "light": "#4e3308",
+    "dark": "#040404"
+  },
+  "logo": {
+    "light": "https://media.brand.dev/6388e628-33e8-4157-8d37-ab3aecea050e.svg",
+    "dark": "https://media.brand.dev/6388e628-33e8-4157-8d37-ab3aecea050e.svg"
+  },
+  "favicon": "https://media.brand.dev/b0c0ebc1-db53-4c49-b910-14d17676e662.jpg",
+  "navbar": {
+    "primary": {
+      "type": "github",
+      "href": "https://github.com/janczakb/filament-short-url"
+    }
+  },
+  "navigation": {
+    "tabs": [
+      {
+        "tab": "Documentation",
+        "groups": [
+          {
+            "group": "Get Started",
+            "pages": [
+              "introduction",
+              "quickstart",
+              "requirements"
+            ]
+          },
+          {
+            "group": "Core Features",
+            "pages": [
+              "features/link-management",
+              "features/qr-codes",
+              "features/analytics",
+              "features/targeting",
+              "features/deep-linking",
+              "features/retargeting-pixels"
+            ]
+          },
+          {
+            "group": "Configuration",
+            "pages": [
+              "configuration/plugin-setup",
+              "configuration/environment-variables",
+              "configuration/custom-domains",
+              "configuration/geo-ip",
+              "configuration/queues-and-scheduling"
+            ]
+          },
+          {
+            "group": "Integrations",
+            "pages": [
+              "integrations/webhooks",
+              "integrations/google-analytics",
+              "integrations/programmatic-usage"
+            ]
+          },
+          {
+            "group": "Reference",
+            "pages": [
+              "reference/artisan-commands",
+              "reference/events",
+              "reference/changelog"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "API Reference",
+        "groups": [
+          {
+            "group": "Overview",
+            "pages": [
+              "api/overview",
+              "api/authentication"
+            ]
+          },
+          {
+            "group": "Endpoints",
+            "pages": [
+              "api/links/list",
+              "api/links/create",
+              "api/links/get",
+              "api/links/update",
+              "api/links/delete",
+              "api/links/stats"
+            ]
+          }
+        ]
+      }
+    ]
+  }
+}

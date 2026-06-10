@@ -1,0 +1,157 @@
+---
+title: "Register and Configure the Filament Short URL Plugin"
+sidebarTitle: "Plugin Setup"
+description: "Learn how to register Filament Short URL in your Panel Provider and configure navigation, access control, user integration, and custom model overrides."
+---
+
+Every Filament plugin starts in a Panel Provider. Filament Short URL is no different — you register it once, configure it with a fluent API, and the plugin wires up all resources, the Settings page, and the redirect engine automatically. This page walks you through every option available on the plugin class.
+
+## Registering the Plugin
+
+Open your Panel Provider — typically `app/Providers/Filament/AdminPanelProvider.php` — and add `FilamentShortUrlPlugin` to the `plugins()` call:
+
+```php
+use Bjanczak\FilamentShortUrl\FilamentShortUrlPlugin;
+
+public function panel(Panel $panel): Panel
+{
+    return $panel
+        ->plugins([
+            FilamentShortUrlPlugin::make()
+                ->navigationGroup('Marketing')
+                ->navigationLabel('Short Links')
+                ->navigationIcon('heroicon-o-link')
+                ->navigationSort(50),
+        ]);
+}
+```
+
+All fluent methods are **optional**. When you omit a method, the plugin falls back to its built-in defaults or your translation files.
+
+## Navigation Options
+
+Use these methods to position the plugin's menu items wherever they belong in your sidebar:
+
+<ParamField path="navigationGroup" type="string" optional>
+  Groups all Short URL resources under a named sidebar section (e.g. `'Marketing'`). When omitted, the items appear ungrouped.
+</ParamField>
+
+<ParamField path="navigationLabel" type="string" optional>
+  Overrides the top-level menu item label. When omitted, the plugin uses its built-in translation string.
+</ParamField>
+
+<ParamField path="navigationIcon" type="string" optional>
+  Replaces the default sidebar icon with any [Heroicon](https://heroicons.com) name. When omitted, the plugin uses its built-in default icon.
+</ParamField>
+
+<ParamField path="navigationSort" type="integer" optional>
+  Controls where the resource appears in the sidebar list relative to other items. Lower values float to the top. When omitted, Filament uses its default sort order.
+</ParamField>
+
+## Restricting Settings Access
+
+<ParamField path="authorizeSettingsUsing" type="Closure" optional>
+  Accepts any closure that returns a `bool`. When the closure returns `false`, the Settings page returns a `403` and the **Settings** button in the table header is hidden automatically.
+</ParamField>
+
+By default, any user who can view Short URLs can also reach the Settings page. Restrict it to admins like this:
+
+```php
+FilamentShortUrlPlugin::make()
+    ->authorizeSettingsUsing(fn () => auth()->user()->hasRole('admin'))
+```
+
+You can use any boolean expression in the closure, including `spatie/laravel-permission` checks:
+
+```php
+FilamentShortUrlPlugin::make()
+    ->authorizeSettingsUsing(fn () => auth()->user()->can('manage short-url settings'))
+```
+
+### Restricting via a Laravel Policy
+
+Instead of passing a closure, you can define a `manageSettings` method on a `ShortUrl` policy. The plugin detects it automatically — no plugin configuration needed:
+
+```php
+// app/Policies/ShortUrlPolicy.php
+public function manageSettings(User $user): bool
+{
+    return $user->is_admin;
+}
+```
+
+Register the policy in your `AuthServiceProvider`:
+
+```php
+use Bjanczak\FilamentShortUrl\Models\ShortUrl;
+use App\Policies\ShortUrlPolicy;
+
+protected $policies = [
+    ShortUrl::class => ShortUrlPolicy::class,
+];
+```
+
+<Info>
+**Priority order:** `authorizeSettingsUsing()` callback → `ShortUrlPolicy@manageSettings` → default `canViewAny()` fallback.
+</Info>
+
+## The Settings Panel
+
+The plugin ships a built-in **Settings** page accessible directly from the sidebar. Settings are persisted and cached automatically, and they immediately override any config file defaults.
+
+<Tip>
+You can configure most day-to-day options — queue connection, Geo-IP driver, rate limiting, GA4 credentials, and more — directly in the Settings panel without touching `.env` or config files.
+</Tip>
+
+The Settings form is split into eight focused tabs: **Link**, **Targeting**, **Tracking**, **Security**, **Geo-IP**, **VPN Detection**, **QR Design**, and **Pixels**. Navigate between tabs using URL query parameters (e.g. `?tab=qr`).
+
+## User Integration
+
+The `user` config block tells the plugin which model represents your users and how to display creator information (name, email, avatar) in the admin table. Publish the config file and adjust the values to match your application:
+
+```php
+// config/filament-short-url.php
+'user' => [
+    'model'         => \App\Models\User::class,
+    'name_column'   => 'name',
+    'email_column'  => 'email',
+    'avatar_column' => 'avatar_url',
+],
+```
+
+### Avatar Resolution Order
+
+When the plugin needs to display a user's avatar, it works through these steps in order:
+
+<Steps>
+  <Step title="Method call">
+    Calls `$user->{avatar_column}()` if the named method exists on the model.
+  </Step>
+  <Step title="Attribute read">
+    Reads `$user->{avatar_column}` as a direct model attribute.
+  </Step>
+  <Step title="HasAvatar interface">
+    Calls `$user->getFilamentAvatarUrl()` if your model implements `Filament\Models\Contracts\HasAvatar`.
+  </Step>
+  <Step title="Gravatar fallback">
+    Generates a Gravatar URL from the user's email address.
+  </Step>
+</Steps>
+
+Set `avatar_column` to `null` to skip steps 1 and 2 and go straight to the `HasAvatar` interface check.
+
+## Model Overrides
+
+You can substitute the built-in `ShortUrl` and `ShortUrlVisit` models with your own custom classes. This is useful when you need to add relationships, scopes, or custom casts:
+
+```php
+// config/filament-short-url.php
+'models' => [
+    'short_url'       => \App\Models\ShortUrl::class,
+    'short_url_visit' => \App\Models\ShortUrlVisit::class,
+],
+```
+
+<Note>
+Custom model classes must extend the package's base models (`Bjanczak\FilamentShortUrl\Models\ShortUrl` and `Bjanczak\FilamentShortUrl\Models\ShortUrlVisit`) to ensure full compatibility with the Filament resources and redirect engine.
+</Note>

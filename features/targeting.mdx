@@ -1,0 +1,179 @@
+---
+title: "Smart Link Targeting: Device, Geo, Language, and A/B"
+sidebarTitle: "Targeting"
+description: "Route visitors to different URLs based on device type, country, browser language, or weighted A/B variants using Filament Short URL's targeting rules."
+---
+
+Targeting rules let you turn a single short URL into a smart router that delivers each visitor to the right destination. Instead of creating separate links for mobile users, specific countries, or A/B experiments, you define up to ten ordered rules on one link — the engine evaluates them top-to-bottom and redirects the visitor as soon as the first rule matches. If no rule matches, the link's default destination URL is used as the fallback.
+
+## How Rules Work
+
+Each targeting rule is evaluated independently against the incoming request. A rule contains a match strategy, a destination type, and one or more filters. You can stack up to **10 rules** per link.
+
+<CardGroup cols={2}>
+  <Card title="Sequential Evaluation" icon="list-ol">
+    Rules are tested from top to bottom. The first matching rule wins, and the visitor is immediately redirected.
+  </Card>
+  <Card title="Default Fallback" icon="arrow-right-to-bracket">
+    If no rule matches the visitor's request, the link's primary destination URL is used — no 404, no dead end.
+  </Card>
+  <Card title="AND / OR Logic" icon="circle-nodes">
+    Choose whether **all** filters in a rule must match (`and`) or whether **any** filter is enough (`or`).
+  </Card>
+  <Card title="Single or Split" icon="code-branch">
+    Each rule can send traffic to one URL (`single`) or distribute it across A/B variants (`split`).
+  </Card>
+</CardGroup>
+
+## Rule Structure
+
+| Field | Type | Description |
+|---|---|---|
+| `match` | `"and"` \| `"or"` | How the filters within the rule combine |
+| `destination_type` | `"single"` \| `"split"` | Whether to send traffic to one URL or split it across variants |
+| `url` | string (URL) | The redirect destination when `destination_type` is `"single"` |
+| `variants` | array | A/B variant definitions when `destination_type` is `"split"` |
+| `filters` | array | One or more filter objects to evaluate against the visitor |
+
+## Filter Types
+
+Every filter object has a `type` and a `data` object whose key matches the filter type.
+
+<AccordionGroup>
+  <Accordion title="Device — desktop, mobile, tablet" icon="display">
+    Routes visitors based on the device category detected from their user agent.
+
+    ```json
+    { "type": "device", "data": { "devices": ["mobile", "tablet"] } }
+    ```
+
+    **Allowed values:** `desktop`, `mobile`, `tablet`
+  </Accordion>
+
+  <Accordion title="Platform — OS detection" icon="laptop">
+    Routes visitors based on their operating system.
+
+    ```json
+    { "type": "platform", "data": { "platforms": ["ios", "android"] } }
+    ```
+
+    **Allowed values:** `android`, `fire_os`, `ios`, `linux`, `mac`, `windows`
+  </Accordion>
+
+  <Accordion title="Country — ISO country codes" icon="earth-americas">
+    Routes visitors based on their resolved country. Country codes are case-insensitive ISO 3166-1 alpha-2 values.
+
+    ```json
+    { "type": "country", "data": { "countries": ["US", "GB", "DE"] } }
+    ```
+
+    The admin panel renders these with flag icons from `flagcdn.com` for easy selection.
+  </Accordion>
+
+  <Accordion title="Language — browser Accept-Language" icon="language">
+    Routes visitors based on the preferred language reported by their browser. Uses a double-pass match: exact locale first (`en-US`), then base language fallback (`en`).
+
+    ```json
+    { "type": "language", "data": { "languages": ["pl", "de"] } }
+    ```
+
+    **Values:** ISO 639-1 language codes, case-insensitive (e.g. `en`, `pl`, `zh`, `de`).
+  </Accordion>
+</AccordionGroup>
+
+<Note>
+  Each filter type (`device`, `platform`, `country`, `language`) can appear **at most once** per rule. Adding the same type twice in a single rule is a validation error.
+</Note>
+
+<Tip>
+  The `match` field controls how the filters inside **one rule** combine — not how multiple rules relate to each other. With `"match": "and"`, every filter in the rule must match the visitor. With `"match": "or"`, any single matching filter is enough to trigger that rule's redirect.
+</Tip>
+
+## A/B Split Testing
+
+Set `destination_type` to `"split"` on a rule (or on the link itself) to distribute traffic across 2–5 weighted URL variants.
+
+### Variant fields
+
+| Field | Type | Description |
+|---|---|---|
+| `label` | string | Human-readable name shown in the analytics dashboard |
+| `url` | string (URL) | The destination for visitors assigned this variant |
+| `weight` | integer (0–100) | Percentage share of traffic for this variant |
+
+<Note>
+  Variant weights must **sum to exactly 100**. The API returns a validation error if the total differs. In the Filament admin panel you can drag the weight sliders or click **"Balance weights"** to divide traffic evenly with one click. Weights are automatically rebalanced whenever you add or remove a variant.
+</Note>
+
+Every visit records the resolved variant in the `selected_variant` column. The link's analytics dashboard shows a **Variant Clicks Distribution** bar chart so you can compare actual click shares against your configured weights. UTM parameters on the original click are forwarded to whichever variant is selected.
+
+### Where to use A/B split testing
+
+<Steps>
+  <Step title="Root-level split test">
+    Set **Destination Type** to `A/B Split Test` directly on the short URL. Every visitor hitting the link is distributed across your variants — no targeting conditions required.
+  </Step>
+  <Step title="Nested inside a targeting rule">
+    Combine split testing with audience targeting. For example, send mobile visitors from Poland into a 60/40 test, while everyone else goes to a single fallback URL. Set `destination_type: "split"` on a specific rule and leave the link's root destination as the fallback.
+  </Step>
+</Steps>
+
+## API Example
+
+Pass `targeting_rules` as an array when creating or updating a link via the REST API or the programmatic builder.
+
+```json
+[
+  {
+    "match": "and",
+    "destination_type": "single",
+    "url": "https://example.com/mobile-landing",
+    "filters": [
+      { "type": "device", "data": { "devices": ["mobile", "tablet"] } },
+      { "type": "country", "data": { "countries": ["US", "GB"] } }
+    ]
+  },
+  {
+    "match": "or",
+    "destination_type": "split",
+    "variants": [
+      { "label": "Variant A", "url": "https://example.com/a", "weight": 60 },
+      { "label": "Variant B", "url": "https://example.com/b", "weight": 40 }
+    ],
+    "filters": [
+      { "type": "device", "data": { "devices": ["desktop"] } }
+    ]
+  }
+]
+```
+
+The first rule redirects mobile and tablet visitors from the US or GB to a dedicated landing page (both conditions must match). The second rule splits desktop visitors between two variants at a 60/40 ratio. Any visitor who doesn't match either rule falls back to the link's default destination URL.
+
+## Using the Admin Panel
+
+<Steps>
+  <Step title="Open the link form">
+    Create a new short URL or edit an existing one in the Filament panel.
+  </Step>
+  <Step title="Go to the Targeting & Security tab">
+    The targeting rule builder is in the **Targeting & Security** tab of the link form.
+  </Step>
+  <Step title="Add a rule">
+    Click **Add rule**, choose your match strategy (`AND` / `OR`), select filters, and set your destination URL or A/B variants.
+  </Step>
+  <Step title="Re-order as needed">
+    Drag rules into the evaluation order you want. Rules are tested top-to-bottom — the first match wins.
+  </Step>
+  <Step title="Save">
+    Save the link. The targeting rules take effect immediately on the next visit.
+  </Step>
+</Steps>
+
+## Filter Reference
+
+| Filter type | Data key | Allowed values |
+|---|---|---|
+| `device` | `devices` | `desktop`, `mobile`, `tablet` |
+| `platform` | `platforms` | `android`, `fire_os`, `ios`, `linux`, `mac`, `windows` |
+| `country` | `countries` | ISO 3166-1 alpha-2 codes (e.g. `US`, `GB`, `PL`) — case-insensitive |
+| `language` | `languages` | ISO 639-1 language codes (e.g. `en`, `pl`, `de`) — case-insensitive |

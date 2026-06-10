@@ -1,0 +1,224 @@
+---
+title: "GET /api/short-url/links — List Short Links"
+sidebarTitle: "List Links"
+description: "Retrieve a paginated list of all your short links ordered by newest first. Returns 30 results per page with full metadata for each link."
+---
+
+The list endpoint returns all short links in your account, ordered by creation date descending (newest first). Results are paginated at 30 items per page. Use the `page` query parameter to move through pages, or follow the cursor URLs in the `links` object of the response. Each item in the `data` array is a full short link object with the same shape returned by the single-link endpoint.
+
+## Endpoint
+
+```
+GET /api/short-url/links
+```
+
+**Required scope:** `links:read-only` or `links:read-write`
+
+## Query Parameters
+
+<ParamField query="page" type="integer">
+  The page number to retrieve. Defaults to `1`. Each page contains up to 30 links.
+</ParamField>
+
+## Example Request
+
+<CodeGroup>
+```bash cURL
+curl https://yourdomain.com/api/short-url/links \
+  -H "Authorization: Bearer YOUR_API_KEY" \
+  -H "Accept: application/json"
+```
+
+```bash Page 2
+curl "https://yourdomain.com/api/short-url/links?page=2" \
+  -H "Authorization: Bearer YOUR_API_KEY" \
+  -H "Accept: application/json"
+```
+</CodeGroup>
+
+## Example Response
+
+<CodeGroup>
+```json 200 OK
+{
+  "data": [
+    {
+      "id": 42,
+      "destination_type": "single",
+      "destination_url": "https://example.com/product",
+      "rotation_variants": null,
+      "custom_domain_id": null,
+      "url_key": "abc123",
+      "short_url": "https://yourdomain.com/s/abc123",
+      "is_enabled": true,
+      "redirect_status_code": 302,
+      "total_visits": 150,
+      "unique_visits": 98,
+      "max_visits": null,
+      "activated_at": null,
+      "expires_at": null,
+      "webhook_url": null,
+      "targeting_rules": [],
+      "password": null,
+      "show_warning_page": false,
+      "auto_open_app_mobile": false,
+      "ga_tracking_id": null,
+      "track_visits": true,
+      "track_ip_address": true,
+      "track_browser": true,
+      "track_browser_version": true,
+      "track_operating_system": true,
+      "track_operating_system_version": true,
+      "track_device_type": true,
+      "track_referer_url": true,
+      "track_browser_language": true,
+      "pixels": [],
+      "notes": null,
+      "created_at": "2026-01-15T10:00:00+00:00"
+    }
+  ],
+  "links": {
+    "first": "https://yourdomain.com/api/short-url/links?page=1",
+    "last": "https://yourdomain.com/api/short-url/links?page=5",
+    "prev": null,
+    "next": "https://yourdomain.com/api/short-url/links?page=2"
+  },
+  "meta": {
+    "current_page": 1,
+    "last_page": 5,
+    "per_page": 30,
+    "total": 142
+  }
+}
+```
+</CodeGroup>
+
+## Response Fields
+
+### Top-level
+
+<ResponseField name="data" type="array">
+  Array of short link objects for the current page.
+</ResponseField>
+
+<ResponseField name="links" type="object">
+  Pagination cursor URLs.
+  <Expandable title="links fields">
+    <ResponseField name="first" type="string">URL of the first page.</ResponseField>
+    <ResponseField name="last" type="string">URL of the last page.</ResponseField>
+    <ResponseField name="prev" type="string | null">URL of the previous page, or `null` if you are on page 1.</ResponseField>
+    <ResponseField name="next" type="string | null">URL of the next page, or `null` if you are on the last page.</ResponseField>
+  </Expandable>
+</ResponseField>
+
+<ResponseField name="meta" type="object">
+  Pagination metadata.
+  <Expandable title="meta fields">
+    <ResponseField name="current_page" type="integer">The current page number.</ResponseField>
+    <ResponseField name="last_page" type="integer">The total number of pages.</ResponseField>
+    <ResponseField name="per_page" type="integer">Number of items per page (always 30).</ResponseField>
+    <ResponseField name="total" type="integer">Total number of short links across all pages.</ResponseField>
+  </Expandable>
+</ResponseField>
+
+### Data item fields
+
+<ResponseField name="id" type="integer">
+  The unique numeric database ID of the short link.
+</ResponseField>
+
+<ResponseField name="destination_type" type="string">
+  Either `single` (one destination URL) or `split` (A/B traffic rotation across multiple variants).
+</ResponseField>
+
+<ResponseField name="destination_url" type="string | null">
+  The target URL visitors are redirected to. `null` when `destination_type` is `split`.
+</ResponseField>
+
+<ResponseField name="rotation_variants" type="array | null">
+  Array of variant objects (`label`, `url`, `weight`) when `destination_type` is `split`. `null` otherwise.
+</ResponseField>
+
+<ResponseField name="custom_domain_id" type="integer | null">
+  The ID of the verified custom domain this link uses, or `null` if it uses your default domain.
+</ResponseField>
+
+<ResponseField name="url_key" type="string">
+  The short link slug (e.g., `abc123`). Appended to your domain to form the short URL.
+</ResponseField>
+
+<ResponseField name="short_url" type="string">
+  The fully resolved short URL string (e.g., `https://yourdomain.com/s/abc123`).
+</ResponseField>
+
+<ResponseField name="is_enabled" type="boolean">
+  Whether the link is currently active. Disabled links return a 410 or redirect to the `expiration_redirect_url`.
+</ResponseField>
+
+<ResponseField name="redirect_status_code" type="integer">
+  The HTTP status code used for the redirect — `301` (permanent) or `302` (temporary).
+</ResponseField>
+
+<ResponseField name="total_visits" type="integer">
+  Total number of visits recorded for this link (includes repeated visitors).
+</ResponseField>
+
+<ResponseField name="unique_visits" type="integer">
+  Number of unique visitors, identified by hashed IP address.
+</ResponseField>
+
+<ResponseField name="max_visits" type="integer | null">
+  Maximum click limit before the link auto-deactivates. `null` means no limit.
+</ResponseField>
+
+<ResponseField name="activated_at" type="string | null">
+  ISO 8601 timestamp after which the link becomes active. `null` means the link is active immediately.
+</ResponseField>
+
+<ResponseField name="expires_at" type="string | null">
+  ISO 8601 timestamp after which the link stops working. `null` means it never expires.
+</ResponseField>
+
+<ResponseField name="webhook_url" type="string | null">
+  Per-link webhook URL for click event notifications. `null` falls back to the global webhook.
+</ResponseField>
+
+<ResponseField name="targeting_rules" type="array | null">
+  Array of smart targeting rule objects. Empty array or `null` means no rules are configured.
+</ResponseField>
+
+<ResponseField name="password" type="string | null">
+  Plain-text password required to access this link. `null` means unrestricted.
+</ResponseField>
+
+<ResponseField name="show_warning_page" type="boolean">
+  When `true`, visitors see a safety interstitial before being redirected.
+</ResponseField>
+
+<ResponseField name="auto_open_app_mobile" type="boolean">
+  When `true`, mobile visitors are prompted to open the link directly in a native app.
+</ResponseField>
+
+<ResponseField name="ga_tracking_id" type="string | null">
+  GA4 Measurement ID used for server-side tracking on this specific link (format: `G-XXXXXXXXXX`).
+</ResponseField>
+
+<ResponseField name="track_visits" type="boolean">
+  Whether analytics logging is enabled for this link.
+</ResponseField>
+
+<ResponseField name="pixels" type="array">
+  Array of attached retargeting pixel objects. Each contains `id`, `name`, `type`, `pixel_id`, and `is_active`.
+</ResponseField>
+
+<ResponseField name="notes" type="string | null">
+  Internal admin notes. Not shown to visitors.
+</ResponseField>
+
+<ResponseField name="created_at" type="string">
+  ISO 8601 timestamp when the short link was created.
+</ResponseField>
+
+<Note>
+  The individual tracking flags (`track_ip_address`, `track_browser`, `track_browser_version`, `track_operating_system`, `track_operating_system_version`, `track_device_type`, `track_referer_url`, `track_browser_language`) are also included in each item and follow the same `boolean` type.
+</Note>

@@ -1,0 +1,144 @@
+---
+title: "Get Up and Running with Filament Short URL Quickly"
+sidebarTitle: "Quickstart"
+description: "Install Filament Short URL via Composer, publish migrations, register the plugin in your Filament panel provider, and create your first short link."
+---
+
+This guide walks you through installing Filament Short URL into an existing Laravel 11+ application that already has a Filament v5 panel configured. By the end you'll have the plugin running and your first short link ready to share.
+
+<Steps>
+
+### Install via Composer
+
+Run the following command from your project root to pull in the package:
+
+```bash
+composer require janczakb/filament-short-url
+```
+
+Laravel's package auto-discovery registers the service provider automatically — no manual changes to `config/app.php` are needed.
+
+### Publish and Run Migrations
+
+Publish the database migration files and apply them to your database:
+
+```bash
+php artisan vendor:publish --tag=filament-short-url-migrations
+php artisan migrate
+```
+
+This creates all the database tables the plugin needs to store links, visits, analytics, and settings.
+
+### Publish Assets
+
+All publishable assets are optional — only publish what you intend to customise:
+
+```bash
+# Config file → config/filament-short-url.php
+php artisan vendor:publish --tag=filament-short-url-config
+
+# Translations → lang/vendor/filament-short-url/  (EN + PL included)
+php artisan vendor:publish --tag=filament-short-url-translations
+
+# Blade views — publish only if you want to customise templates
+php artisan vendor:publish --tag=filament-short-url-views
+
+# Pre-compiled CSS → public/css/janczakb/filament-short-url/
+php artisan filament:assets
+```
+
+The CSS file ships pre-compiled — you don't need to run `npm` or a Tailwind build step to get styles working.
+
+**Custom Filament theme (Tailwind CSS v4):** If you compile your own Filament theme, add an `@source` directive so Tailwind scans the plugin's Blade views:
+
+```css
+/* resources/css/filament/admin/theme.css */
+@source './vendor/janczakb/filament-short-url/resources/views/**/*.blade.php';
+```
+
+**Keep CSS up to date automatically:** Add `filament:assets` to the `post-autoload-dump` hook in your `composer.json` so the compiled CSS stays current on every `composer install` or `composer update`:
+
+```json
+"scripts": {
+    "post-autoload-dump": [
+        "Illuminate\\Foundation\\ComposerScripts::postAutoloadDump",
+        "@php artisan package:discover --ansi",
+        "@php artisan filament:assets"
+    ]
+}
+```
+
+### Register the Plugin in Your Panel Provider
+
+Open your Filament panel provider (typically `app/Providers/Filament/AdminPanelProvider.php`) and register the plugin inside the `panel()` method:
+
+```php
+use Bjanczak\FilamentShortUrl\FilamentShortUrlPlugin;
+
+public function panel(Panel $panel): Panel
+{
+    return $panel
+        ->plugins([
+            FilamentShortUrlPlugin::make()
+                ->navigationGroup('Marketing')      // optional — sidebar group name
+                ->navigationLabel('Short Links')    // optional — override menu item name
+                ->navigationIcon('heroicon-o-link') // optional — override sidebar icon
+                ->navigationSort(50),               // optional — sort order in sidebar
+        ]);
+}
+```
+
+All four fluent methods are optional. Omit any you don't need and the plugin falls back to sensible defaults defined in its translation files.
+
+<Tip>
+  Use `->navigationGroup()` to nest the plugin's menu items under an existing sidebar section such as `'Marketing'` or `'Tools'`, keeping your panel navigation tidy.
+</Tip>
+
+### Create Your First Short Link
+
+After registering the plugin, navigate to **Short URLs** in your Filament admin panel sidebar. Follow these steps to create your first link:
+
+1. Click **New Short URL** in the top-right corner.
+2. Enter the **Destination URL** — the long URL you want to shorten.
+3. Leave the **URL Key** field empty to auto-generate a 6-character Base62 key, or type a custom slug (e.g. `summer-sale`).
+4. Click **Save**.
+
+Your short link is now live at `/{prefix}/{key}` — for example, `https://yourdomain.com/s/abc123`. The default prefix is `s`, configurable via `SHORT_URL_PREFIX` in your `.env` file or through the Settings panel after installation.
+
+<Info>
+  Click any row in the Short URLs table to jump directly to that link's analytics dashboard. You can also hover a row and press keyboard shortcuts: **E** to edit, **Q** for the QR code designer, **I** to copy the short URL, **S** for statistics, or **X** to delete.
+</Info>
+
+### Configure a Queue Driver (Recommended for Production)
+
+Visit tracking, webhook dispatches, and server-side GA4 events all run as queued jobs to keep redirect response times under 20 ms. For local development the default `sync` driver works without any setup — jobs run inline on the redirect request.
+
+For production, set a real queue driver in your `.env`:
+
+```dotenv
+SHORT_URL_QUEUE=redis
+# or
+SHORT_URL_QUEUE=database
+```
+
+Then start a queue worker:
+
+```bash
+php artisan queue:work --queue=default
+```
+
+If you customised the queue name via `SHORT_URL_QUEUE_NAME`, replace `default` with your chosen queue name.
+
+<Warning>
+  Running `sync` in production means each redirect waits for all tracking jobs to complete before the visitor is forwarded. Use an async driver such as `redis` or `database` to avoid noticeable redirect latency under load.
+</Warning>
+
+</Steps>
+
+<Note>
+  The plugin automatically registers its own scheduled Artisan commands inside the service provider — `short-url:aggregate-and-prune` runs nightly and `short-url:sync-counters` runs every minute (when counter buffering is enabled). You don't need to add these commands manually to your scheduler. Simply ensure the standard Laravel scheduler cron entry is running on your server:
+
+  ```bash
+  * * * * * cd /path-to-your-project && php artisan schedule:run >> /dev/null 2>&1
+  ```
+</Note>

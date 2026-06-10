@@ -1,0 +1,129 @@
+{
+  "projectType": "framework",
+  "projectName": "Filament Short URL",
+  "projectDescription": "A self-hosted URL shortener, QR code manager, and link analytics plugin for Laravel & Filament v5 — a drop-in replacement for Bitly, Dub.co, and Rebrandly with unlimited links, custom domains, advanced targeting, retargeting pixels, and a full REST API.",
+  "theme": "luma",
+  "primaryColor": "#f8c039",
+  "lightColor": "#4e3308",
+  "darkColor": "#040404",
+  "navigation": {
+    "tabs": [
+      {
+        "tab": "Documentation",
+        "groups": [
+          {
+            "group": "Get Started",
+            "pages": [
+              "introduction",
+              "quickstart",
+              "requirements"
+            ]
+          },
+          {
+            "group": "Core Features",
+            "pages": [
+              "features/link-management",
+              "features/qr-codes",
+              "features/analytics",
+              "features/targeting",
+              "features/deep-linking",
+              "features/retargeting-pixels"
+            ]
+          },
+          {
+            "group": "Configuration",
+            "pages": [
+              "configuration/plugin-setup",
+              "configuration/environment-variables",
+              "configuration/custom-domains",
+              "configuration/geo-ip",
+              "configuration/queues-and-scheduling"
+            ]
+          },
+          {
+            "group": "Integrations",
+            "pages": [
+              "integrations/webhooks",
+              "integrations/google-analytics",
+              "integrations/programmatic-usage"
+            ]
+          },
+          {
+            "group": "Reference",
+            "pages": [
+              "reference/artisan-commands",
+              "reference/events",
+              "reference/changelog"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "API Reference",
+        "groups": [
+          {
+            "group": "Overview",
+            "pages": [
+              "api/overview",
+              "api/authentication"
+            ]
+          },
+          {
+            "group": "Endpoints",
+            "pages": [
+              "api/links/list",
+              "api/links/create",
+              "api/links/get",
+              "api/links/update",
+              "api/links/delete",
+              "api/links/stats"
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "keyFeatures": [
+    "Short link generation with custom slugs and Base62 auto-keys",
+    "Custom domain branding with real-time DNS verification",
+    "Full analytics dashboard: visits, devices, browsers, referrers, geo",
+    "Live activity feed with efficient polling",
+    "SVG QR code designer with gradient, dot-style, and logo customization",
+    "QR scan tracking separate from regular web clicks",
+    "Advanced targeting rules: device, country, language, A/B split testing",
+    "Retargeting pixels: Meta, Google Tag, LinkedIn, TikTok, Pinterest",
+    "Mobile deep linking into 24+ native apps",
+    "Universal Links (iOS) and Android App Links support",
+    "REST API with scoped keys (read-only / read-write) and per-key rate limits",
+    "HMAC-SHA256 signed webhooks on visited, created, expired, limit_reached events",
+    "Server-side GA4 Measurement Protocol integration",
+    "Link expiration, max visit caps, single-use mode, and password protection",
+    "Offline GDPR-safe Geo-IP via MaxMind or CDN headers",
+    "VPN, proxy, and bot filtering for clean analytics",
+    "Folders and tags for link organization",
+    "Fluent PHP builder API for programmatic link creation"
+  ],
+  "publicApiSurface": [
+    "GET /api/short-url/links",
+    "POST /api/short-url/links",
+    "GET /api/short-url/links/{idOrKey}",
+    "GET /api/short-url/links/{idOrKey}/stats",
+    "PUT|PATCH /api/short-url/links/{idOrKey}",
+    "DELETE /api/short-url/links/{idOrKey}",
+    "GET /{prefix}/{key} (redirect route)",
+    "GET /.well-known/apple-app-site-association",
+    "GET /.well-known/assetlinks.json",
+    "ShortUrl::destination(url)->urlKey()->expiresAt()->create()",
+    "ShortUrl::isActive(): bool",
+    "ShortUrl::isExpired(): bool",
+    "ShortUrl::getShortUrl(): string",
+    "ShortUrl::incrementVisits(bool): void",
+    "ShortUrl::getCachedStats(): array",
+    "ShortUrl::resolveDestinationUrl(Request): string",
+    "ShortUrlService::create(array): ShortUrl",
+    "FilamentShortUrlPlugin::make()->navigationGroup()->navigationLabel()->navigationIcon()->navigationSort()->authorizeSettingsUsing()",
+    "ShortUrlVisited event",
+    "short-url:aggregate-and-prune (Artisan command)",
+    "short-url:sync-counters (Artisan command)"
+  ]
+}

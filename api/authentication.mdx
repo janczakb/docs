@@ -1,0 +1,119 @@
+---
+title: "Authenticate API Requests with Scoped API Keys"
+sidebarTitle: "Authentication"
+description: "Create scoped API keys in the Filament Settings panel and pass them as Bearer tokens to authenticate every Filament Short URL REST API request."
+---
+
+Every request to the Filament Short URL REST API must be authenticated with an API key. You create and manage these keys inside the Filament admin panel under **Settings → API & Webhooks → Developer API Keys**. Each key carries a scope that controls exactly which operations it may perform, and an optional per-key rate limit that caps how many requests that key can make per minute — independent of the global throttle.
+
+## Creating an API Key
+
+1. Open your Filament admin panel and navigate to **Settings → API & Webhooks**.
+2. Scroll to the **Developer API Keys** section and click **Add Key**.
+3. Give the key a descriptive name (for example, `Zapier integration` or `Read-only dashboard`).
+4. Choose a scope: `links:read-only` or `links:read-write`.
+5. Optionally set a per-key rate limit (requests per minute). The default is 60.
+6. Toggle the key **Active** and save.
+
+<Warning>
+  Your API key is displayed **only once** immediately after creation. Copy it and store it in a secure secrets manager right away — you cannot retrieve the plain-text key again. The server stores only a SHA-256 hash of the key from that point on.
+</Warning>
+
+<Tip>
+  Create a separate key for each integration or service. That way you can revoke or rotate a single key without affecting your other integrations.
+</Tip>
+
+## Passing Your API Key
+
+Include the key in every request using the `Authorization` header with the `Bearer` scheme:
+
+```bash
+curl https://yourdomain.com/api/short-url/links \
+  -H "Authorization: Bearer YOUR_API_KEY" \
+  -H "Accept: application/json"
+```
+
+The API also accepts the key in an `X-Api-Key` header as an alternative:
+
+```bash
+curl https://yourdomain.com/api/short-url/links \
+  -H "X-Api-Key: YOUR_API_KEY" \
+  -H "Accept: application/json"
+```
+
+## Required Headers
+
+| Header | Value | When Required |
+|--------|-------|---------------|
+| `Authorization` | `Bearer YOUR_API_KEY` | Every request (or use `X-Api-Key`) |
+| `X-Api-Key` | `YOUR_API_KEY` | Alternative to `Authorization` |
+| `Accept` | `application/json` | Every request |
+| `Content-Type` | `application/json` | `POST`, `PUT`, `PATCH` requests |
+
+## Key Scopes
+
+Each API key is locked to a single scope at creation time:
+
+<Accordion title="links:read-only — GET requests only">
+  This scope permits only `GET` requests. You can list links, retrieve a single link, and fetch analytics. Any attempt to create, update, or delete a link returns `403 Forbidden`.
+
+  **Suitable for:** dashboards, reporting tools, read-only sync processes, or any integration that only needs to inspect link data.
+</Accordion>
+
+<Accordion title="links:read-write — Full CRUD access">
+  This scope permits all HTTP methods: `GET`, `POST`, `PUT`, `PATCH`, and `DELETE`. You have full control over your short links via the API.
+
+  **Suitable for:** CRM integrations, automation workflows (Zapier, Make), CI/CD pipelines, or any system that needs to create or modify links programmatically.
+</Accordion>
+
+## Per-Key Rate Limiting
+
+In addition to the global API throttle (60 requests/minute by default), each key can have its own rate limit. When a request is made, the effective limit applied is the **lower** of the global throttle and the key's individual limit.
+
+Configure a key's rate limit in **Settings → API & Webhooks → Developer API Keys** by editing the key and entering a value in the **Rate Limit (requests/minute)** field.
+
+## Key Lifecycle Management
+
+Each key has an **Active** toggle. Deactivating a key immediately rejects all incoming requests that use it with `401 Unauthorized`, without requiring you to delete the key. You can reactivate it at any time.
+
+## Error Responses
+
+<CodeGroup>
+```json 401 Missing or Invalid Key
+{
+  "error": "Unauthorized. API Key is missing."
+}
+```
+
+```json 401 Inactive or Invalid Key
+{
+  "error": "Unauthorized. Invalid or inactive API Key."
+}
+```
+
+```json 403 Insufficient Scope
+{
+  "error": "Forbidden. This API key has read-only permissions."
+}
+```
+
+```json 429 Rate Limit Exceeded
+{
+  "error": "Too many requests. API key rate limit exceeded."
+}
+```
+</CodeGroup>
+
+| HTTP Code | Cause |
+|-----------|-------|
+| `401 Unauthorized` | The `Authorization` header is missing, the key does not exist, or the key is inactive |
+| `403 Forbidden` | The key's scope does not allow the requested HTTP method |
+| `429 Too Many Requests` | You have exceeded the per-key or global rate limit — check the `Retry-After` response header |
+
+## Security Notes
+
+Keys are stored in the database as SHA-256 hashes and authenticated using constant-time comparisons to prevent timing attacks. The plain-text key never touches the database after the initial display at creation.
+
+<Info>
+  If you need to rotate a compromised key, deactivate the old key immediately and create a new one. Update your integration with the new key before deleting the old record.
+</Info>

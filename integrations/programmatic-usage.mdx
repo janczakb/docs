@@ -1,0 +1,139 @@
+---
+title: "Create and Manage Short URLs Programmatically in PHP"
+sidebarTitle: "Programmatic Usage"
+description: "Use the fluent ShortUrl builder or ShortUrlService to create, configure, and inspect short links directly in your PHP code without touching the Filament UI."
+---
+
+You can create and manage short URLs entirely in code — from Artisan commands, queued jobs, controller actions, or any other PHP context. The package exposes a fluent static builder on the `ShortUrl` model and a lightweight `ShortUrlService` for array-based creation. Both approaches save the link to the database and return a fully hydrated model instance.
+
+---
+
+## Fluent Builder API
+
+The `ShortUrl::destination()` method starts a builder chain. Call as many configuration methods as you need, then call `->create()` to persist the record.
+
+```php
+use Bjanczak\FilamentShortUrl\Models\ShortUrl;
+
+$shortUrl = ShortUrl::destination('https://example.com/products/promo')
+    ->urlKey('promo2026')          // optional; auto-generated Base62 if omitted
+    ->notes('Spring social promo')
+    ->singleUse()                  // deactivates after first click
+    ->forwardQueryParams()         // appends incoming query strings to destination
+    ->expiresAt(now()->addDays(7))
+    ->trackVisits(true)
+    ->withTracing([
+        'utm_source'   => 'linkedin',
+        'utm_medium'   => 'social',
+        'utm_campaign' => 'spring_sale',
+        'utm_content'  => null,    // null values are skipped automatically
+    ])
+    ->create();
+
+echo $shortUrl->getShortUrl(); // https://yourdomain.com/s/promo2026
+```
+
+### Builder Method Reference
+
+| Method | Argument type | Description |
+|---|---|---|
+| `urlKey(string)` | `string` | Custom redirection key (slug). Collision-checked on save. |
+| `notes(string)` | `string` | Internal notes visible to administrators in the panel. |
+| `singleUse(bool = true)` | `bool` | Deactivate the link automatically after the first successful click. |
+| `forwardQueryParams(bool = true)` | `bool` | Append all incoming query string parameters to the destination URL. |
+| `expiresAt(DateTimeInterface\|Carbon\|null)` | `DateTimeInterface` | Timestamp after which the link stops redirecting. |
+| `activatedAt(DateTimeInterface\|Carbon\|null)` | `DateTimeInterface` | Timestamp from which the link becomes active. |
+| `deactivatedAt(DateTimeInterface\|Carbon\|null)` | `DateTimeInterface` | Timestamp after which the link becomes inactive. |
+| `maxVisits(int\|null)` | `int` | Maximum total visits allowed before the link expires. |
+| `expirationRedirectUrl(string\|null)` | `string` | URL to redirect visitors to when the link is expired or inactive. |
+| `trackVisits(bool = true)` | `bool` | Toggle statistical logging for this link. |
+| `withTracing(array)` | `array` | Append non-null UTM or other tracking parameters to the destination URL. |
+| `create()` | `ShortUrl` | Persist to database and return the `ShortUrl` model instance. |
+
+<Tip>
+  `withTracing()` silently drops any key whose value is `null` or an empty string, so you can safely pass your full UTM array even when some parameters are not applicable.
+</Tip>
+
+---
+
+## ShortUrlService
+
+For situations where you prefer an array-based interface — such as when building a form processor or mapping API request data — inject `ShortUrlService` and call `create()` with an attribute array:
+
+```php
+use Bjanczak\FilamentShortUrl\Services\ShortUrlService;
+
+$service = app(ShortUrlService::class);
+
+$shortUrl = $service->create([
+    'destination_url' => 'https://example.com',
+    'track_visits'    => true,
+]);
+```
+
+The method accepts the same fillable attributes available in the REST API. See the [Create Link reference](/api/links/create) for the full list of supported keys.
+
+---
+
+## ShortUrl Model Helpers
+
+After you retrieve a `ShortUrl` model (whether from the builder, service, or a standard Eloquent query), the following methods are available:
+
+| Method | Returns | Description |
+|---|---|---|
+| `isActive()` | `bool` | Returns `true` if the link is enabled and within its `activated_at` / `expires_at` date range. |
+| `isExpired()` | `bool` | Returns `true` if the link has passed its `expires_at` timestamp. |
+| `getShortUrl()` | `string` | Resolves the full short URL string, e.g. `https://yourdomain.com/s/abc123`. Handles empty route prefixes correctly. |
+| `incrementVisits(bool $isUnique)` | `void` | Atomically increments `total_visits` and, when `$isUnique` is `true`, `unique_visits`. Uses Redis buffering or a queue fallback depending on your configuration. |
+| `getCachedStats()` | `array` | Returns cached key metrics by merging historical daily aggregates with today's raw visit data — completely transparent to callers. |
+| `resolveDestinationUrl(Request $request)` | `string` | Evaluates active targeting rules (device, country, language, A/B rotation) for the current request and returns the correct destination URL. |
+
+### Usage examples
+
+```php
+$shortUrl = ShortUrl::where('url_key', 'promo2026')->firstOrFail();
+
+// Check link state before redirecting
+if (! $shortUrl->isActive()) {
+    return redirect($shortUrl->expiration_redirect_url ?? '/');
+}
+
+// Get the full short URL to display in an email
+$link = $shortUrl->getShortUrl();
+// → "https://yourdomain.com/s/promo2026"
+
+// Fetch pre-aggregated statistics
+$stats = $shortUrl->getCachedStats();
+// → ['totalVisits' => 156, 'uniqueVisits' => 98, 'visitsToday' => 14, ...]
+
+// Resolve the destination for the current request (respects targeting rules)
+$destination = $shortUrl->resolveDestinationUrl($request);
+```
+
+---
+
+## Password Protection (Programmatic)
+
+You can set or update a link's access password via standard Eloquent mass-assignment:
+
+```php
+$shortUrl = ShortUrl::destination('https://secret.example.com')->create();
+
+$shortUrl->update(['password' => 'my-secret-pass']);
+```
+
+<Warning>
+  Passwords are currently stored as plain text. For sensitive use-cases, consider hashing the value before storing and overriding the redirect controller to use `Hash::check()` for verification.
+</Warning>
+
+---
+
+## Associating Retargeting Pixels
+
+Pixels defined in the central Pixel Registry can be attached to any short URL programmatically using Eloquent's `sync()` method on the `pixels` relationship:
+
+```php
+$shortUrl->pixels()->sync([$pixelId1, $pixelId2]);
+```
+
+Pass an empty array to detach all pixels from a link.

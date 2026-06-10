@@ -1,0 +1,93 @@
+---
+title: "Server-Side GA4 Tracking for Short Links"
+sidebarTitle: "Google Analytics"
+description: "Send short_url_visit events to Google Analytics 4 via the Measurement Protocol API — completely server-side, bypassing browser ad blockers entirely."
+---
+
+Filament Short URL sends `short_url_visit` events to Google Analytics 4 using the **GA4 Measurement Protocol API** — a direct server-to-server HTTP call made from your Laravel application. Because no JavaScript runs in the visitor's browser, ad blockers, cookie consent banners, and browser privacy settings have zero effect on your analytics data.
+
+## How It Differs From Client-Side GA4
+
+| | Server-Side (this feature) | Client-Side (gtag.js) |
+|---|---|---|
+| Blocked by ad blockers | ❌ Never | ✅ Frequently |
+| Requires browser JavaScript | No | Yes |
+| Fires from | Your Laravel server | Visitor's browser |
+| Configured per link | Yes (`ga_tracking_id`) | Typically global |
+| Runs asynchronously | Yes, via queue | Yes, via browser |
+
+---
+
+## Configuration
+
+<Steps>
+  <Step title="Create a Measurement Protocol API Secret">
+    In Google Analytics, go to **Admin → Data Streams → (your stream) → Measurement Protocol API secrets** and create a new secret. Copy the generated value.
+
+    <Tip>
+      You'll find Measurement Protocol API secrets under **Admin → Data Streams → choose your web stream → Measurement Protocol API secrets**. Each secret is a short alphanumeric string — not the same as your Measurement ID (`G-XXXXXXXXXX`).
+    </Tip>
+  </Step>
+  <Step title="Add your API Secret to the environment">
+    Set the following variable in your `.env` file:
+
+    ```env
+    GA4_API_SECRET=your_measurement_protocol_secret_here
+    ```
+
+    Alternatively, enter it directly in **Settings → Tracking → Google Analytics 4 → GA4 API Secret**.
+  </Step>
+  <Step title="Optionally set a Firebase App ID">
+    If your GA4 property is linked to a Firebase project, set:
+
+    ```env
+    FIREBASE_APP_ID=1:1234567890:web:abc123def456
+    ```
+
+    If omitted, the plugin uses the Measurement ID from the per-link `ga_tracking_id` field as the stream identifier.
+  </Step>
+  <Step title="Set a GA Tracking ID on each link">
+    Open the link's edit form and navigate to the **Tracking** tab. Enter your GA4 Measurement ID in the **GA Tracking ID** field (format: `G-XXXXXXXXXX`).
+
+    Only links with a `ga_tracking_id` value configured will send events. Links without one are silently skipped.
+  </Step>
+</Steps>
+
+---
+
+## Environment Variables Reference
+
+| Variable | Config key | Default | Description |
+|---|---|---|---|
+| `GA4_API_SECRET` | `ga4.api_secret` | `null` | Measurement Protocol API secret from GA4 Admin |
+| `FIREBASE_APP_ID` | `ga4.firebase_app_id` | `null` | Firebase App ID for Firebase-linked GA4 properties |
+
+---
+
+## How Events Are Sent
+
+When a visitor clicks a short URL that has a `ga_tracking_id` set, the plugin dispatches an asynchronous queued job that calls the GA4 Measurement Protocol endpoint and sends a `short_url_visit` event. The job includes:
+
+- **Client ID** — A deterministic identifier derived from a hash of the visitor's IP address and User Agent. This means the same device is consistently identified across visits without storing any raw personally identifiable information in GA4.
+- **Event name** — `short_url_visit`
+- **Parameters** — URL key, destination URL, and other contextual data available at visit time.
+
+<Info>
+  Client IDs are computed as `hash('sha256', $ipAddress . $userAgent)`. No raw IP addresses or User Agents are ever sent to Google Analytics. This approach satisfies GDPR requirements for analytics without losing session coherence.
+</Info>
+
+---
+
+## Troubleshooting
+
+<AccordionGroup>
+  <Accordion title="Events are not appearing in GA4 DebugView">
+    Make sure your `GA4_API_SECRET` is the **Measurement Protocol API secret**, not your Measurement ID or Data API credentials. Also confirm the link's `ga_tracking_id` field is set and matches your GA4 property (`G-XXXXXXXXXX` format). Allow up to 60 seconds for DebugView to reflect events.
+  </Accordion>
+  <Accordion title="Events show up in DebugView but not in reports">
+    GA4 Measurement Protocol events can take 24–48 hours to appear in standard reports. DebugView is the correct tool for immediate verification. Also check that your GA4 property is not in a data-processing hold.
+  </Accordion>
+  <Accordion title="I have a queue worker — do jobs run there?">
+    Yes. GA4 hit jobs are dispatched to whichever queue connection you configure in **Settings → General → Queue Connection**. Ensure your worker is running with `php artisan queue:work`. If you use the `sync` driver, the GA4 call happens synchronously during the visit recording job, still without blocking the redirect.
+  </Accordion>
+</AccordionGroup>
