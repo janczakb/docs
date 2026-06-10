@@ -8,8 +8,8 @@ Filament Short URL sends `short_url_visit` events to Google Analytics 4 using th
 
 ## How It Differs From Client-Side GA4
 
-| | Server-Side (this feature) | Client-Side (gtag.js) |
-|---|---|---|
+|  | Server-Side (this feature) | Client-Side (gtag.js) |
+| --- | --- | --- |
 | Blocked by ad blockers | ❌ Never | ✅ Frequently |
 | Requires browser JavaScript | No | Yes |
 | Fires from | Your Laravel server | Visitor's browser |
@@ -58,7 +58,7 @@ Filament Short URL sends `short_url_visit` events to Google Analytics 4 using th
 ## Environment Variables Reference
 
 | Variable | Config key | Default | Description |
-|---|---|---|---|
+| --- | --- | --- | --- |
 | `GA4_API_SECRET` | `ga4.api_secret` | `null` | Measurement Protocol API secret from GA4 Admin |
 | `FIREBASE_APP_ID` | `ga4.firebase_app_id` | `null` | Firebase App ID for Firebase-linked GA4 properties |
 
@@ -66,11 +66,28 @@ Filament Short URL sends `short_url_visit` events to Google Analytics 4 using th
 
 ## How Events Are Sent
 
-When a visitor clicks a short URL that has a `ga_tracking_id` set, the plugin dispatches an asynchronous queued job that calls the GA4 Measurement Protocol endpoint and sends a `short_url_visit` event. The job includes:
+As of **v5.2.0**, the GA4 Measurement Protocol pipeline lives in the dedicated **`Ga4MeasurementProtocolService`** singleton (extracted from `TrackShortUrlVisitJob`). When a visitor clicks a short URL that has a `ga_tracking_id` set, an asynchronous queued job calls the service which sends a payload to the GA4 collector.
 
-- **Client ID** — A deterministic identifier derived from a hash of the visitor's IP address and User Agent. This means the same device is consistently identified across visits without storing any raw personally identifiable information in GA4.
-- **Event name** — `short_url_visit`
-- **Parameters** — URL key, destination URL, and other contextual data available at visit time.
+### Full Payload Shape
+
+| Field | Source |
+| --- | --- |
+| `client_id` | `sha256($ipAddress . $userAgent)` — privacy-safe, deterministic across visits |
+| `timestamp_micros` | Visit timestamp in microseconds |
+| `session_id` | Deterministic per-visitor session identifier |
+| `engagement_time_msec` | Synthetic engagement window for GA4 session attribution |
+| `events[]` | Three events per visit: standard `page_view`, standard `click`, custom `short_url_visit` |
+| `event_params` | URL key, destination URL, country code, device type, referrer host, UTM fields |
+
+Standard event names (`page_view`, `click`) are used so the visits appear in GA4's built-in reports — not just the custom event explorer.
+
+### Measurement ID Validation
+
+`Ga4MeasurementProtocolService::isValidMeasurementId()` enforces the regex `G-[A-Z0-9]+` before any HTTP request is opened. Invalid `ga_tracking_id` values are logged and skipped — they never consume a queue retry or count against your API secret rate limit.
+
+### Test Connection Button
+
+In **Settings → Tracking → Google Analytics 4** the **Test connection** button (added v5.2.0) validates your real Measurement ID \+ API secret against the GA4 debug collector via `validateCredentials()`. The placeholder `G-XXXXXXXXXX` is explicitly rejected so you can't accidentally save a stub.
 
 <Info>
   Client IDs are computed as `hash('sha256', $ipAddress . $userAgent)`. No raw IP addresses or User Agents are ever sent to Google Analytics. This approach satisfies GDPR requirements for analytics without losing session coherence.
@@ -84,9 +101,11 @@ When a visitor clicks a short URL that has a `ga_tracking_id` set, the plugin di
   <Accordion title="Events are not appearing in GA4 DebugView">
     Make sure your `GA4_API_SECRET` is the **Measurement Protocol API secret**, not your Measurement ID or Data API credentials. Also confirm the link's `ga_tracking_id` field is set and matches your GA4 property (`G-XXXXXXXXXX` format). Allow up to 60 seconds for DebugView to reflect events.
   </Accordion>
+
   <Accordion title="Events show up in DebugView but not in reports">
     GA4 Measurement Protocol events can take 24–48 hours to appear in standard reports. DebugView is the correct tool for immediate verification. Also check that your GA4 property is not in a data-processing hold.
   </Accordion>
+
   <Accordion title="I have a queue worker — do jobs run there?">
     Yes. GA4 hit jobs are dispatched to whichever queue connection you configure in **Settings → General → Queue Connection**. Ensure your worker is running with `php artisan queue:work`. If you use the `sync` driver, the GA4 call happens synchronously during the visit recording job, still without blocking the redirect.
   </Accordion>

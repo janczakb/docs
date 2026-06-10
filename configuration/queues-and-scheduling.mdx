@@ -4,11 +4,11 @@ sidebarTitle: "Queues & Scheduling"
 description: "Configure async queue workers for sub-20ms redirects and set up the Laravel scheduler for nightly data aggregation and buffered counter flushing."
 ---
 
-Filament Short URL is designed to keep redirect response times under 20ms regardless of how much analytics work happens per click. It achieves this by dispatching all heavy work — visit tracking, Geo-IP lookups, GA4 Measurement Protocol hits, and webhook calls — as asynchronous jobs through the Laravel queue. The scheduler handles two maintenance tasks that run in the background: nightly data aggregation and (optionally) buffered counter flushing. This page explains how to configure both systems.
+Filament Short URL dispatches all heavy work — visit tracking, Geo-IP lookups, GA4 Measurement Protocol hits, webhook calls — as asynchronous jobs through the Laravel queue, so redirects return as fast as your database can confirm the link exists. The scheduler handles three maintenance tasks in the background: nightly data aggregation, daily custom domain DNS re-verification, and (optionally) buffered counter flushing. This page explains how to configure both systems.
 
 ## Queue Configuration
 
-Set the queue connection and queue name in your `.env`:
+The plugin defaults to the **`sync`** driver so it works out of the box without a queue worker. For production with meaningful traffic, switch to `redis` (recommended) or `database`:
 
 ```bash
 SHORT_URL_QUEUE=redis        # redis | database | sqs | beanstalkd | sync
@@ -16,7 +16,7 @@ SHORT_URL_QUEUE_NAME=default
 ```
 
 <Warning>
-The `sync` driver executes all jobs **synchronously** on the request thread before the visitor receives the redirect response. This is fine for local development but will slow down redirects in production. Use an async driver like `redis` or `database` for any production deployment.
+  The `sync` driver executes all jobs **synchronously** on the request thread before the visitor receives the redirect response. This is fine for local development and low-traffic installs but will slow down redirects in production. Use an async driver like `redis` or `database` once you see sustained traffic.
 </Warning>
 
 After setting an async queue driver, ensure a queue worker is running on your server:
@@ -28,8 +28,47 @@ php artisan queue:work --queue=default
 Replace `default` with your custom queue name if you set `SHORT_URL_QUEUE_NAME` to something else. For persistent background workers, use [Supervisor](https://laravel.com/docs/queues#supervisor-configuration) or a managed queue service.
 
 <Info>
-If a tracking job or webhook call fails (timeout, 500 error, etc.), it will **never** crash the visitor's redirect. All job execution points are wrapped in strict error boundaries — failures are logged silently and the visitor is redirected normally.
+  If a tracking job or webhook call fails (timeout, 500 error, etc.), it will **never** crash the visitor's redirect. All job execution points are wrapped in strict error boundaries — failures are logged silently and the visitor is redirected normally.
 </Info>
+
+## Redis Mode & Settings Diagnostics (v5.2.3)
+
+When `SHORT_URL_QUEUE=redis`, configure the Redis connection **inside the plugin** rather than relying on `CACHE_STORE`. Open **Settings → General** and fill in:
+
+| Field | Purpose |
+| --- | --- |
+| Redis host / port | Connection target |
+| Redis password | Optional auth — masked on save and preserved on subsequent saves |
+| Redis database | Logical DB index (default `0`) |
+| Redis key prefix | Namespace for plugin keys (default `fsu:`) |
+
+These values override `database.redis` and `queue.connections.redis` **at runtime**, independently of `CACHE_STORE`. Resolution happens through `PluginRedisConnection`, which detects PhpRedis or Predis automatically.
+
+### Test Buttons
+
+Two diagnostic buttons appear next to the Redis config (v5.2.3):
+
+<CardGroup cols={2}>
+  <Card title="Test Redis connection" icon="bolt">
+    Runs `PING` plus a pipelined `INCR` / `SADD` probe against the form's current (unsaved) values — same primitives the visit counters use. Reports latency in ms.
+  </Card>
+
+  <Card title="Test queue worker" icon="play">
+    Dispatches `VerifyQueueWorkerJob` on the selected connection/queue and waits up to 12 s for a worker to process it. If no worker responds, the error message shows the exact `php artisan queue:work {connection} --queue={name}` command you need to run.
+  </Card>
+</CardGroup>
+
+The form uses `withPreviewSettings()` so test buttons apply your current form state temporarily without saving — useful when validating credentials before committing them.
+
+### Stats Scaling Profile
+
+With `queue_connection=redis`, `StatsScalingProfile` automatically enables:
+
+- **`VisitCounterBuffer`** — dedicated Redis counters for buffered totals / uniques (not the Laravel cache path).
+- **`TodayStatsBuffer`** — pipelined Redis counters for today's summary and hourly charts, merged live in `HasStatsCache` without busting the historical stats cache on every click.
+- **`StatsVisitRecorder`** — hot-path stats side effects extracted from `TrackShortUrlVisitJob` so it no longer flushes the full stats cache per visit.
+
+For `sync` mode, the same profile enables a small SQL micro-cache. The result: predictable stats latency at any traffic level without manual tuning.
 
 ## Counter Buffering (High-Traffic Sites)
 
@@ -44,19 +83,20 @@ SHORT_URL_COUNTER_BUFFERING=true
 When enabled, click counts are written to the cache instead of the database on each visit. The `short-url:sync-counters` Artisan command flushes the accumulated counts to the database. The plugin schedules this command to run automatically every minute (see [Scheduler](#automatic-scheduler-registration) below).
 
 <Warning>
-If you enable counter buffering, you **must** ensure the `short-url:sync-counters` command runs regularly — either via the auto-scheduler or a manual cron entry. If the command never runs, visit counts will not be persisted to the database.
+  If you enable counter buffering, you **must** ensure the `short-url:sync-counters` command runs regularly — either via the auto-scheduler or a manual cron entry. If the command never runs, visit counts will not be persisted to the database.
 </Warning>
 
 ## Automatic Scheduler Registration
 
 As of **v1.3.0**, the plugin automatically registers its own scheduled tasks inside the service provider. You do not need to add any commands to `routes/console.php` or `app/Console/Kernel.php`.
 
-The two scheduled commands and their default schedules are:
+The scheduled commands and their default schedules are:
 
 | Command | Schedule | Condition |
-|---|---|---|
+| --- | --- | --- |
 | `short-url:aggregate-and-prune` | Daily at 02:00 | Runs only when **Enable Daily Aggregation** is ON in Settings |
-| `short-url:sync-counters` | Every minute | Runs only when **Buffer Visit Counts in Cache** is ON in Settings |
+| `short-url:sync-counters` | Every minute | Runs only when **Buffer Visit Counts in Cache** is ON in Settings (or when Redis stats scaling auto-enables it) |
+| `short-url:verify-custom-domains` | Daily | Always runs when custom domains are registered (added v5.2.0) |
 
 Both commands respect the Settings GUI toggles — if the corresponding toggle is off, the command exits immediately without doing any work.
 
@@ -69,7 +109,7 @@ For the auto-scheduler to fire, your server must run the standard Laravel Schedu
 ```
 
 <Note>
-These commands execute synchronously within the `schedule:run` process. You do **not** need a separate queue worker (`php artisan queue:work`) to run them.
+  These commands execute synchronously within the `schedule:run` process. You do **not** need a separate queue worker (`php artisan queue:work`) to run them.
 </Note>
 
 ## Manual Scheduling (Optional)
@@ -87,7 +127,7 @@ Schedule::command('short-url:aggregate-and-prune')->dailyAt('02:00');
 ```
 
 <Warning>
-If you define schedules manually while the Settings toggles are still **ON**, the commands will run twice — once from the plugin's auto-scheduler and once from your manual definition. Disable the Settings toggles to avoid duplicate execution.
+  If you define schedules manually while the Settings toggles are still **ON**, the commands will run twice — once from the plugin's auto-scheduler and once from your manual definition. Disable the Settings toggles to avoid duplicate execution.
 </Warning>
 
 ## What Each Command Does
@@ -98,6 +138,7 @@ If you define schedules manually while the Settings toggles are still **ON**, th
 
     The aggregation queries run as optimized native `GROUP BY` SQL operations directly in the database, so memory usage stays near zero even at millions of rows.
   </Accordion>
+
   <Accordion title="short-url:sync-counters">
     Runs every minute when counter buffering is enabled. It reads the accumulated `total_visits` and `unique_visits` increments from the cache and applies them to the database in a single atomic transaction. If the database write fails, the cache values are restored so no counts are lost.
   </Accordion>

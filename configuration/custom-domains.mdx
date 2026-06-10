@@ -7,7 +7,7 @@ description: "Register and verify your own branded domains to serve short links 
 Branded short links — like `go.yourcompany.com/abc123` instead of `yourapp.com/s/abc123` — build trust and improve click-through rates. Filament Short URL includes a full-featured custom domain manager that handles DNS verification, root-level routing, and multi-domain assignment from the admin panel. You can register as many domains as you need, and each short link can be assigned to any verified domain.
 
 <Warning>
-A custom domain must have its DNS records configured **and** verified before any links assigned to it will redirect correctly. Until verification passes, the domain is inactive.
+  A custom domain must have its DNS records configured **and** verified before any links assigned to it will redirect correctly. Until verification passes, the domain is inactive.
 </Warning>
 
 ## How It Works
@@ -15,7 +15,7 @@ A custom domain must have its DNS records configured **and** verified before any
 When a visitor hits a custom domain link (e.g. `go.yourcompany.com/abc123`), Laravel receives the request with a `Host` header matching your custom domain. The fallback route matches the path directly at the domain root — the default `/s/` prefix is **not** used for custom domain links.
 
 <Note>
-The Filament admin panel includes a real-time DNS verification UI. Click **Setup DNS / Verify** next to any domain to check whether your DNS records are resolving correctly right now. Verification uses PHP's `dns_get_record()` with a `dig` CLI fallback.
+  The Filament admin panel includes a real-time DNS verification UI. Click **Setup DNS / Verify** next to any domain to check whether your DNS records are resolving correctly right now. Verification uses PHP's `dns_get_record()` with a `dig` CLI fallback.
 </Note>
 
 ## Adding a Custom Domain
@@ -28,7 +28,7 @@ The Filament admin panel includes a real-time DNS verification UI. Click **Setup
     Add **one** of the following records at your DNS provider (GoDaddy, Cloudflare, Namecheap, etc.):
 
     | Type | Name | Value |
-    |---|---|---|
+    | --- | --- | --- |
     | `CNAME` | `go` (your subdomain) | `yourapp.com.` (your main app host) |
     | `A` | `go` (your subdomain) | `123.45.67.89` (your server's IP) |
 
@@ -55,7 +55,7 @@ Your web server must forward requests from the custom domain to your Laravel app
         listen 80;
         listen 443 ssl;
         server_name go.yourcompany.com;
-
+    
         location / {
             proxy_pass http://127.0.0.1:80;
             proxy_set_header Host $host;
@@ -66,20 +66,21 @@ Your web server must forward requests from the custom domain to your Laravel app
     }
     ```
   </Accordion>
+
   <Accordion title="nginx — Direct to Laravel public root">
     ```nginx
     server {
         listen 80;
         listen 443 ssl;
         server_name go.yourcompany.com;
-
+    
         root /var/www/your-app/public;
         index index.php;
-
+    
         location / {
             try_files $uri $uri/ /index.php?$query_string;
         }
-
+    
         location ~ \.php$ {
             include snippets/fastcgi-php.conf;
             fastcgi_pass unix:/run/php/php8.3-fpm.sock;
@@ -87,6 +88,7 @@ Your web server must forward requests from the custom domain to your Laravel app
     }
     ```
   </Accordion>
+
   <Accordion title="Caddy">
     ```caddyfile
     go.yourcompany.com {
@@ -96,12 +98,13 @@ Your web server must forward requests from the custom domain to your Laravel app
     }
     ```
   </Accordion>
+
   <Accordion title="Apache">
     ```apache
     <VirtualHost *:80>
         ServerName go.yourcompany.com
         DocumentRoot /var/www/your-app/public
-
+    
         <Directory /var/www/your-app/public>
             AllowOverride All
             Require all granted
@@ -136,3 +139,60 @@ This registers a catch-all route that intercepts any request whose path doesn't 
 ## Multiple Custom Domains
 
 You can register as many custom domains as you need — there is no limit. Each domain goes through the same DNS verification process independently, and individual short links each have their own `custom_domain_id` assignment. This means you can run multiple branded domains from a single Filament installation (e.g. one per client or campaign).
+
+## v5.2.0 Hardening
+
+The custom domain pipeline received a substantial production-hardening pass in **v5.2.0**. The behaviours below are on by default.
+
+### Multi-Record DNS Verification
+
+`ShortUrlCustomDomain::evaluateDnsVerification()` now:
+
+- Resolves **all** A records for the custom domain.
+- Follows **multiple** CNAME targets, not just the first.
+- Intersects the resolved IP set against `app.url`'s A records via `array_intersect`.
+- Removes the legacy `$_SERVER['SERVER_ADDR']` fallback — verification is now strictly DNS-vs-`app.url`.
+
+This eliminates false positives on multi-region hosting (multiple A records) and false negatives behind a CNAME chain (e.g. `go.client.com` → `proxy.cdn.com` → `your-app.com`).
+
+### Activation DNS Gate
+
+```bash
+SHORT_URL_CUSTOM_DOMAIN_ENFORCE_DNS=true   # default
+```
+
+When enabled (default), saving a custom domain with `is_active=true` whose DNS does **not** verify will auto-flip it back to `is_active=false`. This stops broken domains from going live just because someone toggled the switch.
+
+Disable per-host if you provision DNS asynchronously (e.g. Terraform applies after the Filament save):
+
+```bash
+SHORT_URL_CUSTOM_DOMAIN_ENFORCE_DNS=false
+```
+
+### Composite Unique Slugs
+
+The `(url_key, domain_scope_id)` composite unique index means the same slug can exist on the default app domain **and** on each custom domain simultaneously without collision. `domain_scope_id` is `0` for the default domain or the `custom_domain_id` for any custom domain.
+
+### Legacy `/s/{key}` Redirect on Custom Domains
+
+If a visitor lands on `https://go.yourcompany.com/s/abc123` (the old prefixed URL), the plugin emits a `301 Moved Permanently` to `https://go.yourcompany.com/abc123` via `ShortUrlRedirectHandler::resolveLegacyPrefixedRedirect()`. Existing bookmarks keep working without polluting analytics with the `/s/` prefix.
+
+### Reserved Fallback Segments
+
+`HostNormalizer::isReservedFallbackKey()` blocks the following segments from being used as `url_key` values on custom domains so they don't shadow Filament/Laravel routes:
+
+`api`, `admin`, `auth`, `login`, `logout`, `livewire`, `filament`, `up`, `_debugbar`, `horizon`, `telescope`, `nova`, `vendor`
+
+A short link with one of these keys returns a normal `404` when requested on a custom domain.
+
+### Daily DNS Re-Verification
+
+The scheduled command **`short-url:verify-custom-domains`** runs daily and re-evaluates DNS for every custom domain. When DNS regresses (record removed at the registrar), the domain is auto-deactivated under the activation gate — preventing silent broken-link drift months after the initial setup. See [Artisan Commands](/reference/artisan-commands).
+
+### Ownership Enforcement
+
+When `scope_links_to_user` is enabled (default), `CustomDomainValidator` ensures that API keys and panel users can only attach a `custom_domain_id` they actually own. The `exists`, `store`, and `update` REST API requests all run this check before persisting.
+
+### Cache Invalidation on Verify Change
+
+`ShortUrlCustomDomain` busts the redirect/stats cache (`ShortUrlCacheInvalidator`) whenever verification status flips, so stale cached models can't keep serving traffic on a domain that just lost DNS.

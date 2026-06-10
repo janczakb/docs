@@ -36,16 +36,16 @@ echo $shortUrl->getShortUrl(); // https://yourdomain.com/s/promo2026
 ### Builder Method Reference
 
 | Method | Argument type | Description |
-|---|---|---|
+| --- | --- | --- |
 | `urlKey(string)` | `string` | Custom redirection key (slug). Collision-checked on save. |
 | `notes(string)` | `string` | Internal notes visible to administrators in the panel. |
 | `singleUse(bool = true)` | `bool` | Deactivate the link automatically after the first successful click. |
 | `forwardQueryParams(bool = true)` | `bool` | Append all incoming query string parameters to the destination URL. |
-| `expiresAt(DateTimeInterface\|Carbon\|null)` | `DateTimeInterface` | Timestamp after which the link stops redirecting. |
-| `activatedAt(DateTimeInterface\|Carbon\|null)` | `DateTimeInterface` | Timestamp from which the link becomes active. |
-| `deactivatedAt(DateTimeInterface\|Carbon\|null)` | `DateTimeInterface` | Timestamp after which the link becomes inactive. |
-| `maxVisits(int\|null)` | `int` | Maximum total visits allowed before the link expires. |
-| `expirationRedirectUrl(string\|null)` | `string` | URL to redirect visitors to when the link is expired or inactive. |
+| \`expiresAt(DateTimeInterface | Carbon | null)\` | `DateTimeInterface` | Timestamp after which the link stops redirecting. |
+| \`activatedAt(DateTimeInterface | Carbon | null)\` | `DateTimeInterface` | Timestamp from which the link becomes active. |
+| \`deactivatedAt(DateTimeInterface | Carbon | null)\` | `DateTimeInterface` | Timestamp after which the link becomes inactive. |
+| \`maxVisits(int | null)\` | `int` | Maximum total visits allowed before the link expires. |
+| \`expirationRedirectUrl(string | null)\` | `string` | URL to redirect visitors to when the link is expired or inactive. |
 | `trackVisits(bool = true)` | `bool` | Toggle statistical logging for this link. |
 | `withTracing(array)` | `array` | Append non-null UTM or other tracking parameters to the destination URL. |
 | `create()` | `ShortUrl` | Persist to database and return the `ShortUrl` model instance. |
@@ -80,7 +80,7 @@ The method accepts the same fillable attributes available in the REST API. See t
 After you retrieve a `ShortUrl` model (whether from the builder, service, or a standard Eloquent query), the following methods are available:
 
 | Method | Returns | Description |
-|---|---|---|
+| --- | --- | --- |
 | `isActive()` | `bool` | Returns `true` if the link is enabled and within its `activated_at` / `expires_at` date range. |
 | `isExpired()` | `bool` | Returns `true` if the link has passed its `expires_at` timestamp. |
 | `getShortUrl()` | `string` | Resolves the full short URL string, e.g. `https://yourdomain.com/s/abc123`. Handles empty route prefixes correctly. |
@@ -122,9 +122,9 @@ $shortUrl = ShortUrl::destination('https://secret.example.com')->create();
 $shortUrl->update(['password' => 'my-secret-pass']);
 ```
 
-<Warning>
-  Passwords are currently stored as plain text. For sensitive use-cases, consider hashing the value before storing and overriding the redirect controller to use `Hash::check()` for verification.
-</Warning>
+<Note>
+  As of **v5.2.0**, passwords are hashed at rest (bcrypt/argon). Legacy plain-text values are automatically re-hashed on the next save. You can pass a plain-text password through mass assignment — the model `saving` hook handles hashing.
+</Note>
 
 ---
 
@@ -137,3 +137,94 @@ $shortUrl->pixels()->sync([$pixelId1, $pixelId2]);
 ```
 
 Pass an empty array to detach all pixels from a link.
+
+---
+
+## REST API: Bulk & Upsert (v5.2.0)
+
+Beyond the per-link CRUD endpoints, the v5.2.0 API ships bulk and upsert operations for systems that sync large catalogues.
+
+### Bulk Create
+
+```http
+POST /api/short-url/links/bulk
+```
+
+Pass up to **100** link payloads in a single transaction. The whole batch is wrapped in a DB transaction and `ShortUrlCacheInvalidator` runs once at the end.
+
+```json
+{
+  "links": [
+    { "destination_url": "https://example.com/a", "url_key": "a" },
+    { "destination_url": "https://example.com/b", "external_id": "crm-42" }
+  ]
+}
+```
+
+### Upsert
+
+```http
+PUT /api/short-url/links/upsert
+```
+
+Looks up an existing link by `external_id` first, then by `url_key` \+ `destination_url`. If found, updates in place; otherwise creates a new link. Honours `lock_url_key` — attempting to change `url_key` or `custom_domain_id` on a locked link returns `422`.
+
+```json
+{
+  "external_id": "crm-42",
+  "destination_url": "https://example.com/new",
+  "utm_source": "newsletter"
+}
+```
+
+### Helper Endpoints
+
+| Endpoint | Purpose |
+| --- | --- |
+| `GET /api/short-url/links/exists?url_key=abc&custom_domain_id=3` | Returns `{exists: bool, custom_domain_id, domain_scope_id}` — scoped per domain so the same slug on different domains is reported correctly. |
+| `GET /api/short-url/links/random?length=6` | Returns a freshly generated, unused random Base62 key. |
+| `GET /api/short-url/links/info?url=https://example.com/x` | Returns scraped metadata (title, description, OG image) for a candidate destination — handy when building a "create link from URL" UI client-side. |
+
+### CSV Visit Export
+
+```http
+GET /api/short-url/links/{idOrKey}/visits/export?from=2026-05-01&to=2026-06-10
+```
+
+Streams the link's raw visit log as CSV via `VisitCsvExporter`. Same date and dimension filters as the JSON `/stats` endpoint.
+
+### Tags & Folders CRUD
+
+```http
+GET    /api/short-url/tags
+POST   /api/short-url/tags
+PUT    /api/short-url/tags/{id}
+DELETE /api/short-url/tags/{id}
+
+GET    /api/short-url/folders
+POST   /api/short-url/folders
+PUT    /api/short-url/folders/{id}
+DELETE /api/short-url/folders/{id}
+```
+
+Both resources respect tenant scoping when `scope_links_to_user` is enabled — API keys with `owner_user_id` only see/edit resources belonging to that user.
+
+### Filtered Stats
+
+`GET /api/short-url/links/{idOrKey}/stats` accepts the same cross-dimensional filters as the Filament dashboard:
+
+```http
+GET /api/short-url/links/spring-sale/stats?country=PL&device=mobile&utm_source=linkedin
+```
+
+Aliases: `country` → `country_code`, `device` → `device_type`. Response includes `meta.date_from`, `meta.date_to`, `meta.filters`.
+
+---
+
+## API Key Tenancy (v5.2.0/5.2.2)
+
+Each API key can be created with an optional **`owner_user_id`**. When `scope_links_to_user` is enabled in Settings (default), `ApiLinkScope` automatically filters every read and write to links owned by that user — no `where` clauses needed in your code.
+
+As of **v5.2.2**, `owner_user_id` is **required** on new API keys when `scope_links_to_user=true`. Existing unscoped keys keep working until you rotate them.
+
+`ResourceOwnershipValidator` additionally enforces folder/tag/pixel ownership on API writes — you can't attach another tenant's tag to your link even by guessing the ID.

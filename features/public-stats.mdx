@@ -1,0 +1,85 @@
+---
+title: "Public Shareable Statistics"
+sidebarTitle: "Public Stats"
+description: "Share read-only analytics for any short link via a public URL with optional password protection — no Filament panel access required."
+---
+
+Added in **v5.2.0**, the **Public Stats** feature lets you share a read-only analytics view of any short link with people who don't have access to your Filament admin panel — clients, partners, or stakeholders. The endpoint is rate-limited, host-scoped to verified domains, and supports optional password protection.
+
+## Enabling Public Stats on a Link
+
+Open the link form and switch to the **Marketing & API** tab:
+
+| Field | Purpose |
+| --- | --- |
+| `public_stats_enabled` | Toggle the public endpoint on/off for this link (default: off). |
+| `public_stats_password` | Optional password. When set, callers must supply it to read stats. |
+
+## Endpoint
+
+```http
+GET /short-url/public-stats/{url_key}
+```
+
+Served from the matching host (default domain or any verified custom domain on which the link lives). Returns JSON with a public-safe subset of metrics — totals, uniques, daily timeline, top countries / devices / referrers / UTM — but **never** raw IPs, visit IDs, or admin-only flags.
+
+### Sample response
+
+```json
+{
+  "url_key": "spring-sale",
+  "date_from": "2026-05-10",
+  "date_to": "2026-06-10",
+  "totals": {
+    "total_visits": 4821,
+    "unique_visits": 3104,
+    "qr_scans": 612
+  },
+  "timeline": [
+    { "date": "2026-06-10", "visits": 142, "uniques": 98 }
+  ],
+  "top_countries": [{ "country_code": "PL", "visits": 1280 }],
+  "top_referrers": [{ "host": "linkedin.com", "visits": 540 }]
+}
+```
+
+## Password Protection
+
+When `public_stats_password` is set, supply it via **one of two channels** — query string is explicitly rejected to prevent leaking the secret in server logs and referrer headers.
+
+<CardGroup cols={2}>
+  <Card title="POST body" icon="code">
+    ```bash
+    curl -X POST \
+      -H 'Content-Type: application/json' \
+      -d '{"password":"hunter2"}' \
+      https://your-domain.com/short-url/public-stats/spring-sale
+    ```
+  </Card>
+
+  <Card title="Authorization header" icon="key">
+    ```bash
+    curl -H 'Authorization: Bearer hunter2' \
+      https://your-domain.com/short-url/public-stats/spring-sale
+    ```
+  </Card>
+</CardGroup>
+
+<Warning>
+  Passwords passed as `?password=...` in the URL return **400 Bad Request**. Update any client scripts accordingly when migrating from earlier previews.
+</Warning>
+
+## Rate Limiting & Scope
+
+| Constraint | Value |
+| --- | --- |
+| Rate limit | 60 requests / minute per IP |
+| Host scope | Default app domain — only the link that lives on the default domain. Custom domain — only the link whose `custom_domain_id` matches that **verified, active** domain. |
+| Disabled link | Returns a uniform `404 Not Found` (no information leak about which keys exist). |
+| Bots & proxies | Filtered out of the response counts (matches the Filament dashboard). |
+
+## Use Cases
+
+- **Client reporting** — send a campaign client a link to live numbers without provisioning a Filament account.
+- **Public-facing transparency** — publish total downloads / clicks on a marketing page.
+- **Webhooks → dashboards** — pair with `webhook` events for real-time external dashboards while keeping the canonical store inside your Laravel app.

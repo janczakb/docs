@@ -14,6 +14,7 @@ You can configure webhooks at two levels. The two modes coexist; per-link URLs a
   <Card title="Per-Link Webhook URL" icon="link">
     Set a `Dedicated Webhook URL` on a specific short URL (in the **Marketing & API** tab, or via the `webhook_url` REST API field). This URL fires for every event on that link, regardless of global settings or monitored event filters.
   </Card>
+
   <Card title="Global Webhook URL" icon="globe">
     Configure a single URL under **Settings → API & Webhooks → Global Webhook Configuration**. It fires for all links that do **not** have their own dedicated URL, but only for the event types you select in **Monitored Webhook Events**.
   </Card>
@@ -38,7 +39,7 @@ You can configure webhooks at two levels. The two modes coexist; per-link URLs a
 ## Monitored Events
 
 | Event key | When fired |
-|---|---|
+| --- | --- |
 | `visited` | A visitor clicks the short URL |
 | `created` | A new short URL is created via the REST API |
 | `expired` | A link reaches its expiration date |
@@ -92,7 +93,11 @@ All webhook requests use `Content-Type: application/json`. The `visit` object is
 
 ## Signature Verification
 
-Webhook payloads can be cryptographically signed so your endpoint can confirm the request genuinely came from your server.
+Webhook payloads are cryptographically signed so your endpoint can confirm the request genuinely came from your server.
+
+<Warning>
+  **Required as of v5.2.0.** When `webhook_signing_required` is `true` (default) and `global_webhook_enabled` is on, the plugin **refuses to dispatch** webhooks that don't have a `Webhook Signing Secret` configured. This eliminates the legacy "fire-and-forget unsigned webhook" footgun.
+</Warning>
 
 <Steps>
   <Step title="Set a signing secret">
@@ -101,7 +106,7 @@ Webhook payloads can be cryptographically signed so your endpoint can confirm th
   <Step title="Inspect the signature header">
     Every outgoing POST includes an `X-ShortUrl-Signature` header. Its value is computed as:
 
-    ```
+    ```text
     hash_hmac('sha256', $payloadJson, $secret)
     ```
   </Step>
@@ -111,7 +116,7 @@ Webhook payloads can be cryptographically signed so your endpoint can confirm th
     ```php
     $signature = $request->header('X-ShortUrl-Signature');
     $expected  = hash_hmac('sha256', $request->getContent(), $secret);
-
+    
     if (! hash_equals($expected, $signature)) {
         abort(403, 'Invalid signature');
     }
@@ -125,11 +130,25 @@ Webhook payloads can be cryptographically signed so your endpoint can confirm th
 
 ---
 
+## SSRF Protection (v5.2.0)
+
+Webhook URLs are validated against the shared **`OutboundUrlValidator`** policy. The check runs in two places — once on save (REST API and Filament form) and again at dispatch time inside `SendWebhookJob`, immediately before the HTTP request is opened:
+
+- The hostname is DNS-resolved and any IP in private / loopback / link-local / cloud metadata ranges is rejected.
+- `allow_redirects => false` is set on the HTTP client — webhook URLs returning `3xx` are treated as failures rather than chasing the redirect to a potentially internal target.
+- 3xx responses count as a failed delivery and consume a retry attempt.
+
+This stops a compromised admin or a misconfigured CRM from turning your webhook pipeline into an internal-network port scanner.
+
+### Global vs. Per-Link Events (v5.2.0)
+
+Per-link webhooks now also respect the `webhook_events` array on the link model itself (when populated). The `global_webhook_enabled` toggle gates all global webhook dispatch — if it's off, only per-link URLs fire.
+
 ## Retry Policy
 
 If your endpoint returns a non-2xx response or is unreachable, the webhook delivery retries automatically with exponential backoff:
 
-- **Attempts:** 3 total (1 initial + 2 retries)
+- **Attempts:** 3 total (1 initial \+ 2 retries)
 - **Backoff:** Exponential, starting at 10 seconds between each attempt
 - **Failure handling:** After all retries are exhausted, the job lands in your Laravel failed jobs table. You can inspect and re-run it with `php artisan queue:retry`.
 

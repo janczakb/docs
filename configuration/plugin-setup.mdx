@@ -21,6 +21,21 @@ Every Filament plugin starts in a Panel Provider. Filament Short URL is no diffe
   See [Quickstart](/quickstart) for the full install flow.
 </Warning>
 
+<Warning>
+  **First-time install and every upgrade:** compile the plugin's Tailwind v4 stylesheet and republish Filament assets, otherwise the panel renders without plugin styles.
+
+  ```bash
+  npx @tailwindcss/cli \
+    -i ./vendor/janczakb/filament-short-url/resources/css/plugin.css \
+    -o ./vendor/janczakb/filament-short-url/resources/dist/filament-short-url.css \
+    --minify
+  
+  php artisan filament:assets
+  ```
+
+  See [Quickstart](/quickstart) for the full install flow.
+</Warning>
+
 ## Registering the Plugin
 
 Open your Panel Provider — typically `app/Providers/Filament/AdminPanelProvider.php` — and add `FilamentShortUrlPlugin` to the `plugins()` call:

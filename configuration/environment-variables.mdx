@@ -7,7 +7,7 @@ description: "Complete reference for every .env variable supported by Filament S
 Filament Short URL reads its runtime configuration from your `.env` file through a published config at `config/filament-short-url.php`. Every variable listed below has a sensible default so you only need to set the ones that differ from the defaults in your environment. The tables below group variables by concern to make it easy to find what you need.
 
 <Tip>
-Most settings are also configurable via the Filament **Settings** panel — you don't need to touch `.env` for day-to-day changes. Database settings override config file values when present.
+  Most settings are also configurable via the Filament **Settings** panel — you don't need to touch `.env` for day-to-day changes. Database settings override config file values when present.
 </Tip>
 
 ---
@@ -17,12 +17,27 @@ Most settings are also configurable via the Filament **Settings** panel — you 
 These variables control how short URL redirect routes are registered and how the application domain behaves.
 
 | Variable | Config Path | Default | Description |
-|---|---|---|---|
+| --- | --- | --- | --- |
 | `SHORT_URL_PREFIX` | `route_prefix` | `'s'` | URL prefix for redirect routes — links resolve to `/{prefix}/{key}`. Set to an empty string to serve from the domain root. |
 | `SHORT_URL_SITE_NAME` | `site_name` | `null` | Brand name shown on interstitial, password-prompt, and expiry pages. Falls back to `config('app.name')`. |
 | `SHORT_URL_LOCK_KEY` | `lock_url_key` | `false` | When `true`, prevents changing the URL key after a link is created. |
 | `SHORT_URL_DISABLE_DEFAULT_DOMAIN` | `disable_default_domain` | `false` | Disables the default app domain for short links — useful when you want all links to use custom domains only. |
 | `SHORT_URL_ENABLE_FALLBACK` | `enable_fallback_route` | `true` | Registers a fallback route that catches requests on custom domains and routes them to the correct short link. |
+| `SHORT_URL_CUSTOM_DOMAIN_ENFORCE_DNS` | `custom_domains.enforce_dns_on_activate` | `true` | When ON, saving a custom domain with `is_active=true` whose DNS does not verify is forced back to inactive. Added in v5.2.0. |
+
+---
+
+## Redis (v5.2.3)
+
+These fallbacks are used by `PluginRedisConnection` before any Settings GUI overrides apply. Most installs configure Redis through **Settings → General** instead of `.env`.
+
+| Variable | Config Path | Default | Description |
+| --- | --- | --- | --- |
+| `REDIS_HOST` | `redis.host` | `127.0.0.1` | Redis host. |
+| `REDIS_PORT` | `redis.port` | `6379` | Redis port. |
+| `REDIS_PASSWORD` | `redis.password` | `null` | Redis password. |
+| `REDIS_DB` | `redis.database` | `0` | Logical Redis DB index. |
+| `REDIS_PREFIX` | `redis.prefix` | `fsu:` | Plugin key namespace. |
 
 ---
 
@@ -31,7 +46,7 @@ These variables control how short URL redirect routes are registered and how the
 These variables configure visitor country detection. See [Geo-IP Configuration](/configuration/geo-ip) for a full driver comparison.
 
 | Variable | Config Path | Default | Description |
-|---|---|---|---|
+| --- | --- | --- | --- |
 | `SHORT_URL_GEO_IP` | `geo_ip.enabled` | `true` | Globally enable or disable Geo-IP country tracking. |
 | `SHORT_URL_GEO_IP_DRIVER` | `geo_ip.driver` | `'headers'` | Geo-IP driver to use: `headers`, `maxmind`, or `ip-api`. |
 | `SHORT_URL_MAXMIND_DB` | `geo_ip.maxmind.database_path` | `storage_path('geoip/GeoLite2-Country.mmdb')` | Absolute path to your MaxMind GeoLite2-Country `.mmdb` database file. |
@@ -45,7 +60,7 @@ These variables configure visitor country detection. See [Geo-IP Configuration](
 These variables tune how aggressively the plugin caches redirect lookups and visit counters.
 
 | Variable | Config Path | Default | Description |
-|---|---|---|---|
+| --- | --- | --- | --- |
 | `SHORT_URL_CACHE_TTL` | `cache_ttl` | `3600` | Model cache TTL (seconds) for redirect lookups. Set to `0` to disable caching. Default is 1 hour. |
 | `SHORT_URL_COUNTER_BUFFERING` | `counter_buffering.enabled` | `false` | Buffers visit counts in the cache and flushes them to the database via the `short-url:sync-counters` command, reducing write pressure on high-traffic sites. |
 | `SHORT_URL_ANONYMIZE_IPS` | `tracking.anonymize_ips` | `false` | Anonymize stored IP addresses (IPv4/IPv6) for GDPR compliance. Unique visitor identification still works via SHA-256 hashing. |
@@ -57,7 +72,7 @@ These variables tune how aggressively the plugin caches redirect lookups and vis
 Visit tracking jobs, Geo-IP lookups, GA4 hits, and webhook dispatches all run through the Laravel queue. Configure the connection and queue name here.
 
 | Variable | Config Path | Default | Description |
-|---|---|---|---|
+| --- | --- | --- | --- |
 | `SHORT_URL_QUEUE` | `queue_connection` | `'sync'` | Queue connection for asynchronous visit tracking jobs (e.g. `redis`, `database`, `sqs`). |
 | `SHORT_URL_QUEUE_NAME` | `queue_name` | `'default'` | Name of the queue to which visit tracking jobs are dispatched. |
 
@@ -68,7 +83,7 @@ Visit tracking jobs, Geo-IP lookups, GA4 hits, and webhook dispatches all run th
 At scale, raw visit logs can grow very large. These variables control the nightly aggregation and pruning process.
 
 | Variable | Config Path | Default | Description |
-|---|---|---|---|
+| --- | --- | --- | --- |
 | `SHORT_URL_PRUNING_ENABLED` | `pruning.enabled` | `true` | Enables nightly aggregation of raw visits into daily summaries and pruning of old raw records. |
 | `SHORT_URL_PRUNING_DAYS` | `pruning.retention_days` | `90` | Number of days to retain raw visit logs before they are pruned. Set to `0` to disable pruning while keeping aggregation. |
 
@@ -79,7 +94,7 @@ At scale, raw visit logs can grow very large. These variables control the nightl
 Protect your redirect routes from bot floods and abuse with per-IP rate limiting.
 
 | Variable | Config Path | Default | Description |
-|---|---|---|---|
+| --- | --- | --- | --- |
 | `SHORT_URL_RATE_LIMITING` | `rate_limiting.enabled` | `false` | Enables per-IP rate limiting on all short URL redirect routes. |
 | `SHORT_URL_RATE_LIMIT_MAX` | `rate_limiting.max_attempts` | `60` | Maximum redirect requests allowed per IP within the decay window. Clients that exceed this receive a `429 Too Many Requests` with a `Retry-After` header. |
 | `SHORT_URL_RATE_LIMIT_DECAY` | `rate_limiting.decay_seconds` | `60` | Rolling time window in seconds for the rate limiter. |
@@ -89,7 +104,7 @@ Protect your redirect routes from bot floods and abuse with per-IP rate limiting
 ## Deep Linking
 
 | Variable | Config Path | Default | Description |
-|---|---|---|---|
+| --- | --- | --- | --- |
 | `SHORT_URL_DEEP_LINKING_ENABLED` | `deep_linking.enabled` | `false` | Enables serving `apple-app-site-association` and `assetlinks.json` files directly from your domain root for iOS Universal Links and Android App Links. Disabled by default. |
 
 ---
@@ -99,6 +114,6 @@ Protect your redirect routes from bot floods and abuse with per-IP rate limiting
 These variables enable server-side GA4 event tracking via the Measurement Protocol, bypassing browser ad-blockers entirely.
 
 | Variable | Config Path | Default | Description |
-|---|---|---|---|
+| --- | --- | --- | --- |
 | `GA4_API_SECRET` | `ga4.api_secret` | `null` | GA4 Measurement Protocol API Secret. Generate this in Google Analytics under **Admin → Data Streams → Measurement Protocol API secrets**. |
 | `FIREBASE_APP_ID` | `ga4.firebase_app_id` | `null` | GA4 Firebase App ID or Measurement ID for the target analytics stream. |

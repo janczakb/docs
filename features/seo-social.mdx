@@ -1,0 +1,74 @@
+---
+title: "SEO, Open Graph & Link Cloaking"
+sidebarTitle: "SEO & Social"
+description: "Per-link Open Graph metadata, search engine indexing control, and link cloaking — serve branded previews to social bots while routing humans to the destination."
+---
+
+Added in **v5.2.0**, the **SEO & Social** tab on every link form gives you per-link control over how social platforms (Facebook, LinkedIn, X, Slack, WhatsApp, iMessage) preview your short URL and whether search engines index it. You can also cloak the destination behind an iframe on your short-link domain so the branded preview stays consistent even when the underlying target changes.
+
+## Open Graph Metadata
+
+Fill in any combination of the fields below in **SEO & Social** on the link form. A live social preview sidebar updates as you type.
+
+| Field | Purpose |
+| --- | --- |
+| `og_title` | The `<og:title>` and `<twitter:title>` value used by social bots. Falls back to the destination's own title when blank. |
+| `og_description` | The `<og:description>` and `<twitter:description>` value. |
+| `og_image` | Uploaded image (auto-converted to WebP) used as `<og:image>` and `<twitter:image>`. Stored on a temp disk first, then promoted to the permanent disk on save. |
+
+<Tip>
+  Click **Scrape from destination** to pull existing OG tags from the target URL into the form. The scraper is SSRF-safe (DNS-resolves the host, blocks private/metadata IPs, streams the response) and runs through `GET /short-url/scrape-meta`.
+</Tip>
+
+## Search Engine Indexing (`do_index`)
+
+Toggle **Allow search indexing** per link. When OFF (default for cloaked or expired-style links), every response for that link — interstitial, password prompt, redirect HTML — emits:
+
+```http
+X-Robots-Tag: noindex, nofollow
+```
+
+The robots header is applied centrally through `RobotsTagApplicator`, so it propagates even on cached redirect responses.
+
+## Link Cloaking (`is_cloaked`)
+
+When **Cloak destination** is enabled, the short URL behaves differently for humans vs. crawlers:
+
+<CardGroup cols={2}>
+  <Card title="Humans" icon="user">
+    See `https://your-short-domain.com/{key}` in the address bar with the destination embedded in a full-viewport iframe. The branded URL never changes even if the target moves.
+  </Card>
+
+  <Card title="Social bots / crawlers" icon="robot">
+    Receive a standalone HTML page containing only your OG meta tags — no iframe, no redirect. Previews on Facebook, LinkedIn, Slack, etc. always reflect what you configured.
+  </Card>
+</CardGroup>
+
+### Iframeable Pre-Check
+
+Before saving a cloaked link, the form runs `POST /short-url/check-iframeable` against the destination. It follows the redirect chain manually, re-validates every hop against the SSRF allow-list, and inspects `X-Frame-Options` / `Content-Security-Policy: frame-ancestors`. If the destination cannot be iframed, the form warns you and you can choose a non-cloaked redirect instead.
+
+<Warning>
+  Cloaking only works when the destination allows being embedded. Sites with `X-Frame-Options: DENY` (most banks, Google services, many SaaS apps) cannot be cloaked — the iframeable check catches this at save time.
+</Warning>
+
+## REST API Fields
+
+All three controls are exposed on `POST /api/short-url/links`, `PUT /links/{idOrKey}`, and `PUT /links/upsert`:
+
+```json
+{
+  "destination_url": "https://example.com/article",
+  "og_title": "Spring Sale — 30% off",
+  "og_description": "Limited-time discount on our entire catalogue.",
+  "og_image": "https://your-cdn.com/og/spring-sale.png",
+  "do_index": false,
+  "is_cloaked": true
+}
+```
+
+See the [Create link reference](/api/links/create) for the full field list.
+
+## Excluded by Design
+
+`og:video` is **not** implemented — video previews require multi-stream metadata, transcoding, and CSP gymnastics that materially complicate the redirect pipeline. Use `og_image` with a poster frame instead.

@@ -28,18 +28,23 @@ When you click **New Short URL**, the creation form opens with two required deci
   <Card title="Notes" icon="pen-line">
     Store internal context — campaign name, ticket number, or anything useful to your team. Notes are visible only in the admin panel and never exposed to visitors.
   </Card>
+
   <Card title="Enabled / Disabled toggle" icon="toggle-on">
     Flip a link off instantly without deleting it. Disabled links return your configured expiry response instead of redirecting.
   </Card>
+
   <Card title="Redirect status code" icon="arrow-right-arrow-left">
     Choose **302 (Temporary)** or **301 (Permanent)**. The default is 302 — browsers cache 301 responses, which can cause subsequent visits to bypass analytics.
   </Card>
+
   <Card title="Password protection" icon="lock">
     Require visitors to enter a password before they are redirected. The unlock state is stored in the PHP session, so visitors only see the prompt once per session.
   </Card>
+
   <Card title="Redirect warning page" icon="triangle-exclamation">
     Display a safety interstitial showing the destination URL before forwarding. Visitors choose **Continue** or **Go Back**. Confirmation is tracked via a `?confirmed=1` query parameter — no extra session storage needed.
   </Card>
+
   <Card title="Google Safe Browsing" icon="shield-check">
     Every destination URL you create or edit is checked against Google's threat database in real time. The form blocks saving if the URL is flagged as unsafe.
   </Card>
@@ -50,7 +55,7 @@ When you click **New Short URL**, the creation form opens with two required deci
 You can set any combination of the following conditions. When any condition is met the link stops redirecting and either sends visitors to your fallback URL or shows the branded expiry page.
 
 | Field | What it does |
-|---|---|
+| --- | --- |
 | `activated_at` | The link is inactive before this timestamp. |
 | `expires_at` | The link expires at this timestamp. |
 | `max_visits` | The link deactivates after this many total visits. |
@@ -71,6 +76,7 @@ Enable **Forward Query Parameters** on any link and all query strings the visito
   <Card title="Folders" icon="folder">
     Assign each link to one folder. Clicking a folder in the sidebar instantly filters the link list to show only that folder's links. The folder badge also shows a per-folder link count.
   </Card>
+
   <Card title="Tags" icon="tag">
     Add up to five tags per link. Clicking any tag in the table navigates to a filtered list of all links sharing that tag. Tag counts are displayed next to each tag name.
   </Card>
@@ -102,7 +108,7 @@ You can configure the user model, name column, email column, and avatar attribut
   While hovering any row in the links table you can press a single key to trigger the most common actions instantly — no need to open the action dropdown.
 
   | Key | Action |
-  |---|---|
+  | --- | --- |
   | `E` | Open edit form |
   | `Q` | Open QR code designer |
   | `I` | Copy short URL to clipboard |
@@ -115,6 +121,34 @@ You can configure the user model, name column, email column, and avatar attribut
 ## UTM Builder
 
 The **UTM Builder** panel lets you compose campaign URLs directly inside the link form. Fill in `utm_source`, `utm_medium`, `utm_campaign`, `utm_term`, and `utm_content` and the destination URL field updates in real time. Edit the destination URL directly and the UTM fields reflect the change immediately — the sync is fully bidirectional, so you never end up with mismatched values.
+
+### Link-Level UTM (Stored Separately)
+
+Added in **v5.2.0**, every link also has dedicated `utm_source`, `utm_medium`, `utm_campaign`, `utm_term`, `utm_content`, and `ref` columns stored on the `short_urls` table itself (independent of whatever is baked into `destination_url`). At redirect time, `LinkUtmMerger` merges these with any query parameters the visitor arrived with — link-level values win for keys the visitor didn't provide, visitor values win for keys they did.
+
+This lets you:
+
+- Override or stamp UTM on the redirect without rewriting destination URLs.
+- Keep a clean `destination_url` and analyse campaign-level UTM in the dashboard.
+- Pass `ref` through to the destination as a referral token.
+
+Link-level UTM is exposed on the REST API as top-level fields (`utm_source`, `utm_medium`, `utm_campaign`, `utm_term`, `utm_content`, `ref`).
+
+## External ID (`external_id`)
+
+Added in **v5.2.0**, the optional `external_id` column lets you tag each link with your own unique identifier from a CRM, marketing automation tool, or upstream system. The column is **nullable and unique**, so each external system value maps to at most one short link.
+
+`external_id` powers the **upsert** API (`PUT /api/short-url/links/upsert`) — pass the same value twice and the second call updates the existing record instead of creating a duplicate. See [Programmatic Usage](/integrations/programmatic-usage) for details.
+
+## Locking the URL Key
+
+Set `SHORT_URL_LOCK_KEY=true` in `.env` (or toggle in **Settings → Link**) to prevent any user from changing `url_key` or `custom_domain_id` after a link is created. As of v5.2.0 the lock is enforced server-side in three places:
+
+- **Filament panel** — `LockedUrlKeyGuard` sanitizes save data and blocks the model save when a locked key change is attempted.
+- **REST API** — `UpsertShortUrlRequest` and the standard update request reject the field with `422`.
+- **Model layer** — A `saving` hook reverts disallowed changes even when set via `update()` or mass assignment.
+
+Use this on production deployments where outbound links are embedded in printed materials, emails, or QR codes — once the short URL is in the wild, changing the slug breaks every existing reference.
 
 ## Custom Domains
 

@@ -39,7 +39,9 @@
               "features/analytics",
               "features/targeting",
               "features/deep-linking",
-              "features/retargeting-pixels"
+              "features/retargeting-pixels",
+              "features/seo-social",
+              "features/public-stats"
             ]
           },
           {

@@ -14,24 +14,31 @@ Open a link's analytics by clicking the row or pressing `S` while hovering it. T
   <Card title="Total Visits" icon="chart-line">
     The complete count of all recorded redirects for the link over the selected date range.
   </Card>
+
   <Card title="Unique Visits" icon="user">
     Distinct visitors identified by their hashed IP address. Useful for gauging true reach vs. repeat clicks.
   </Card>
+
   <Card title="QR Scan Conversions" icon="qrcode">
     Visits that arrived via a QR code scan, shown with a period-over-period delta so you can track growth over time.
   </Card>
+
   <Card title="Referrers" icon="arrow-pointer">
     Breakdown of traffic sources by referrer URL host (e.g., `linkedin.com`, `t.co`).
   </Card>
+
   <Card title="Devices, Browsers & OSes" icon="laptop">
-    Visit distribution by device type (desktop, mobile, tablet), browser name + version, and OS name + version.
+    Visit distribution by device type (desktop, mobile, tablet), browser name \+ version, and OS name \+ version.
   </Card>
+
   <Card title="Countries & Cities" icon="earth-europe">
     Geographic breakdown of visitors including country and city, powered by your configured Geo-IP driver.
   </Card>
+
   <Card title="Browser Languages" icon="language">
     Top languages from visitor `Accept-Language` headers — helpful for planning localized landing pages.
   </Card>
+
   <Card title="UTM Parameters" icon="tags">
     Aggregated breakdowns of `utm_source`, `utm_medium`, and `utm_campaign` values across all visits.
   </Card>
@@ -49,6 +56,18 @@ Every chart and table in the analytics dashboard is cross-filterable. Click any 
 
 Filters are applied and removed by clicking the same element again. The active filter state is reflected in the URL so you can bookmark or share a pre-filtered view.
 
+### Cross-Dimensional Performance (v5.2.0)
+
+Filtered dashboards used to run 15\+ raw `GROUP BY` queries per slice. As of v5.2.0, the new `FilteredStatsCollector` reads pre-built daily JSON rollups stored on `short_url_daily_stats`:
+
+- **`cross_dimensional_stats`** — single-filter slices (e.g. country → browser breakdown).
+- **`cross_filter_pairs`** — two-filter composite keys (e.g. `country_code:PL|browser:Chrome`).
+- **`filter_qr_counts`** — filtered QR scan totals per day.
+
+For today's date or three-plus active filters, a bounded raw scan fills the gap and is merged with the rollups. The result is sub-second filtered dashboards even on links with millions of historical visits.
+
+The same filters are accepted by the REST API (`GET /api/short-url/links/{idOrKey}/stats?country=PL&device=mobile`) via `ApiStatsFilterParser`. Aliases: `country` → `country_code`, `device` → `device_type`.
+
 ## Visitor World Map
 
 The **Visitor World Map** renders an interactive SVG map of the world. Each country is shaded according to its relative click volume — darker shading indicates higher traffic. Hovering over any country shows its name, total visit count, and percentage share of traffic. This gives you an instant global overview without scanning through a country table.
@@ -59,13 +78,13 @@ The **Visit Logs** tab shows a paginated table of individual raw visit records. 
 
 <Accordion title="Fields recorded per visit">
   | Field | Description |
-  |---|---|
+  | --- | --- |
   | `ip_address` | Visitor IP (optionally anonymized — see GDPR section below) |
-  | `browser` + `browser_version` | Parsed browser name and version |
-  | `operating_system` + `operating_system_version` | Parsed OS name and version |
+  | `browser` \+ `browser_version` | Parsed browser name and version |
+  | `operating_system` \+ `operating_system_version` | Parsed OS name and version |
   | `device_type` | `desktop`, `mobile`, or `tablet` |
-  | `referer_url` + `referer_host` | Full referrer URL and its parsed hostname |
-  | `country` + `country_code` + `city` | Geo-IP resolved location |
+  | `referer_url` \+ `referer_host` | Full referrer URL and its parsed hostname |
+  | `country` \+ `country_code` \+ `city` | Geo-IP resolved location |
   | `utm_source`, `utm_medium`, `utm_campaign`, `utm_term`, `utm_content` | UTM parameters from the click URL |
   | `browser_language` | Preferred language from `Accept-Language` header |
   | `is_qr_scan` | `true` if the visit came from a QR code scan |
@@ -75,7 +94,20 @@ The **Visit Logs** tab shows a paginated table of individual raw visit records. 
 
 ## Live Activity Feed
 
-The **Live Feed** page streams new visits in real time with an automatic 5-second refresh. It is designed to be lightweight — the dashboard only re-renders when new visits have actually arrived, so watching a quiet link wastes no resources. Polling also pauses automatically when you switch to another browser tab or scroll the widget out of view, then resumes the moment you return.
+The **Live Feed** page streams new visits in real time. As of **v5.2.1** it uses a native **Server-Sent Events (SSE)** stream rather than Livewire polling:
+
+```http
+GET /short-url/live-feed/{shortUrl}/stream
+```
+
+The endpoint is authenticated against the same policy as the link itself. The frontend opens an `EventSource` connection and the widget's `onStreamUpdate()` handler receives diff payloads only when new visits arrive — no polling, no idle network traffic.
+
+| Config key | Default | Purpose |
+| --- | --- | --- |
+| `live_feed.sse_interval_seconds` | `3` | Server-side flush cadence |
+| `live_feed.sse_max_duration_seconds` | `120` | Auto-close stream after this many seconds (clients reconnect automatically) |
+
+When `queue_connection=redis`, `LiveFeedBroadcaster` pushes updates via Redis pub/sub for true real-time delivery; otherwise it falls back to the SSE polling tail.
 
 The feed shows the 25 most recent visits with country flag, browser, device type, referrer, city, and a QR scan badge where applicable.
 
@@ -92,6 +124,16 @@ The resolved variant is recorded on every raw visit, so the variant breakdown is
 </Note>
 
 You can configure the VPN/proxy detection driver and choose between **Flag Only** (record the visit but mark it) or **Block Traffic** (return a 403 to the visitor) in **Settings → Security → VPN & Proxy Detection**.
+
+### Security Breakdown Widget
+
+Added in **v5.2.0**, the stats dashboard includes a **Security Breakdown** widget powered by daily rollups (`all_visits_count`, `bot_visits_count`, `proxy_visits_count` on `short_url_daily_stats`). It shows what percentage of traffic was filtered out as bots vs. VPN/proxy vs. real humans — useful for proving the cleanliness of your analytics to clients.
+
+The widget reads from `getSecurityBreakdownStats()`, which uses the same `StatsCacheHelper` as the main dashboard (safe on file / DB / Redis / Memcached cache drivers).
+
+### Fail-Closed VPN Detection
+
+When the VPN detection mode is set to **Block Traffic (`block_with_403`)** and the external proxy detection API times out or errors, the plugin treats the visit as a proxy and returns `403`. This prevents silent fail-open under load — added in v5.2.0.
 
 ## GDPR IP Anonymization
 
